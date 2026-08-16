@@ -1,0 +1,75 @@
+# J.A.R.V.I.S. example configuration.
+# Copy to config/jarvis.yaml and edit. Secrets go in .env, never here.
+# The authoritative schema is documented in docs/CONFIGURATION.md.
+
+core:
+  name: "J.A.R.V.I.S."
+  data_dir: "C:/JARVIS/data"
+  cache_dir: "C:/JARVIS/cache"
+  logs_dir: "C:/JARVIS/logs"
+  runtime_dir: "C:/JARVIS/runtime"
+  workspaces_dir: "C:/JARVIS/workspaces"
+  models_dir: "C:/JARVIS/models"
+  backups_dir: "C:/JARVIS/backups"
+  timezone: "Asia/Kolkata"
+
+logging:
+  level: "INFO"
+  format: "json"
+  retention_days: 30
+
+events:
+  queue_maxsize: 1000
+  worker_count: 4
+
+ai:
+  default_provider: "local"
+  providers:
+    local:
+      type: "local"
+      enabled: true
+      # Do not hard-code a model until hardware benchmarking is performed.
+      # Example: model: "qwen2.5:7b-instruct"
+      base_url: "http://127.0.0.1:11434"   # Ollama
+      model: ""
+      timeout_seconds: 120
+    opencode:
+      type: "opencode"
+      enabled: false
+      base_url: "http://127.0.0.1:4096"
+      api_key_env: "OPENCODE_API_KEY"
+      timeout_seconds: 300
+
+memory:
+  sqlite_path: "C:/JARVIS/data/memory.db"
+  auto_save_conversations: false
+
+tasks:
+  max_iterations: 10
+  default_timeout_minutes: 30
+  persist_interval_seconds: 5
+
+tools:
+  terminal:
+    default_risk: "LOW_WRITE"
+  browser:
+    default_risk: "READ"
+
+security:
+  # allow | ask | deny
+  default_mode: "ask"
+  allow_auto_approve_read: true
+  destructive_confirm: true
+  audit_log: "C:/JARVIS/data/audit.log"
+
+voice:
+  wake_word:
+    enabled: false
+    model: "openwakeword"
+  stt:
+    engine: "faster-whisper"
+    model: "small"
+    language: "en"
+  tts:
+    engine: "piper"
+    voice: "en_US-lessac-medium"

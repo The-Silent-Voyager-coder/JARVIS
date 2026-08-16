@@ -1,0 +1,42 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Secrets (never committed) ---
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
+
+# --- J.A.R.V.I.S. runtime ---
+data/
+cache/
+logs/
+runtime/
+backups/
+models/
+!models/.gitkeep
+
+# --- Local workspaces (may contain large projects) ---
+workspaces/
+!workspaces/.gitkeep
+
+# --- Editors / OS ---
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+.DS_Store
