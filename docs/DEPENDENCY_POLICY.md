@@ -4,8 +4,9 @@
 
 **No dependency enters `project.dependencies` without written justification.**
 
-Phase 0 ships with **zero runtime dependencies**. Phase 1 should prefer
-Python's standard library. Dependencies are added only when:
+Phase 0 shipped with **zero runtime dependencies**; Phase 1 added exactly one
+(`PyYAML`, see §5). Later phases must continue to prefer Python's standard
+library. Dependencies are added only when:
 
 1. The capability is genuinely required for the current phase (no speculative
    additions for future phases), **and**
@@ -47,17 +48,15 @@ swappable behind the voice pipeline interfaces (`docs/ARCHITECTURE.md` §4).
 
 ## 5. Approved Dependencies
 
-*None yet — Phase 0 has zero runtime dependencies.*
-
 | Package | Version | Phase | Justification | Alternatives rejected | Added |
 |---|---|---|---|---|---|
-| — | — | — | — | — | — |
+| `PyYAML` | `>=6.0` | 1 | The configuration format is YAML (`config/jarvis.yaml`); parsing it safely requires a maintained, tested YAML library — stdlib has none | Hand-rolled parser (security risk, maintenance burden); JSON/TOML format change (violates the Phase 0 YAML contract); `ruamel.yaml` (unnecessary round-trip API) | Phase 1 (2026) |
 
 ## 6. Dev-Only Dependencies
 
-`pyproject.toml [project.optional-dependencies] dev` currently holds only
-`pytest` + `pytest-cov`. Dev tooling (ruff, mypy) may be added as dev-only;
-they never ship with the runtime package.
+`pyproject.toml [project.optional-dependencies] dev` holds `pytest`,
+`pytest-cov`, `mypy` + `types-PyYAML`, and `ruff`. Dev tooling never ships
+with the runtime package (wheel contains only the `jarvis` package).
 
 ## 7. Review Cadence
 

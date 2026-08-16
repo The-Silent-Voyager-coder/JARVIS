@@ -14,29 +14,37 @@ long-running objectives, and recover from failures.
 | Platform | Windows 11 (ASUS Gaming V16, RTX 4050 6 GB VRAM, 16 GB RAM) |
 | Cost | ₹0 / $0 — no paid APIs, no paid hosting, no paid cloud |
 | Language | Python 3.11+ |
-| Status | **Phase 0 — Architecture** (foundation only, no runtime features yet) |
+| Status | **Phase 1 — Core Runtime** (lifecycle, configuration, events, CLI) |
 
 ---
 
-## Current Status (Phase 0)
+## Current Status (Phase 1)
 
-Phase 0 delivers the foundation only:
+Phase 1 delivers a running core runtime:
 
-- Git repository with `main` branch
-- Module directory structure (`jarvis/`)
-- Architecture, interfaces, configuration, security, OpenCode integration,
-  testing, and dependency policy documents (`docs/`)
-- Zero runtime dependencies (see `pyproject.toml`)
+- **Types-first configuration**: defaults → `config/jarvis.yaml` →
+  `JARVIS_*` environment variables, validated against a schema and frozen into
+  typed records (`jarvis.configuration`)
+- **Event bus**: ordered dispatch, subscriber failure isolation, graceful
+  close (`jarvis.events`)
+- **Lifecycle**: `CREATED → INITIALIZING → RUNNING → STOPPING → STOPPED` with
+  startup-failure cleanup (`jarvis.core`)
+- **Service registry**: dependency-ordered start/stop with rollback on
+  failure
+- **Health**: component health checks + overall status
+- **Structured logging**: JSON on stdout and `<logs_dir>/jarvis.log`
+  (rotating), correlation IDs, secret redaction (`jarvis.observability`)
+- **CLI**: `jarvis config validate`, `jarvis health`, `--help`, `--version`
 
-**No runtime features have been implemented yet.** Voice, vision, autonomy,
-memory, tools, and HUD are designed but deliberately not built.
+**Not yet implemented**: AI providers, OpenCode integration, memory, tools,
+voice, vision, autonomy, HUD (Phases 2–10).
 
 ## Development Phases
 
 | Phase | Goal | Status |
 |---|---|---|
-| 0 | Architecture & foundation | **In progress** |
-| 1 | Core runtime (lifecycle, config, events, CLI) | Not started |
+| 0 | Architecture & foundation | **Done** |
+| 1 | Core runtime (lifecycle, config, events, CLI) | **Done** |
 | 2 | Intelligence (AIProvider abstraction, model router) | Not started |
 | 3 | Memory (SQLite, provenance) | Not started |
 | 4 | Tools (files, terminal, apps, git, browser) | Not started |
@@ -56,8 +64,30 @@ jarvis/
 ├── jarvis/          → Python package; one module per subsystem
 ├── tests/           → test suite (per-module subdirectories)
 ├── .env.example     → secret template (real secrets never committed)
-└── pyproject.toml   → project metadata; zero runtime dependencies
+└── pyproject.toml   → project metadata; PyYAML is the only runtime dependency
 ```
+
+## Quick Start
+
+```powershell
+# create the virtual environment and install (editable, with dev tools)
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+
+# validate the configuration (defaults or your own file)
+.\.venv\Scripts\jarvis.exe config validate
+.\.venv\Scripts\jarvis.exe config validate --config config\jarvis.example.yaml
+
+# boot the runtime and report component health
+.\.venv\Scripts\jarvis.exe health
+
+# run the test suite, linter, and type checker
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m mypy jarvis
+```
+
+Exit codes: `0` success, `1` general failure, `2` invalid configuration/input.
 
 ## Reading Order
 

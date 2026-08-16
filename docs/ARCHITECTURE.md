@@ -1,8 +1,9 @@
 # Architecture
 
-> Status: **Phase 0 — design document**. This is the contract that all modules
-> must honor. It may be refined by the architect, but not silently violated by
-> implementation.
+> Status: **Phase 1 — core runtime implemented**. This is the contract that all
+> modules must honor. It may be refined by the architect, but not silently
+> violated by implementation. Phase 1 adds full detail for the runtime,
+> events, configuration, and observability sections that Phase 0 sketched.
 
 ## 1. Mission
 
@@ -118,6 +119,32 @@ Bad:      core -> OpenCode
 Good:     core -> AIProvider ──└──→ OpenCodeProvider
 ```
 
+### Phase 1 implementation
+
+Lifecycle states (`jarvis/core/lifecycle.py`):
+
+```text
+CREATED → INITIALIZING → RUNNING → STOPPING → STOPPED
+                │                        ▲
+                └──▶ STOPPING (failure cleanup only)
+```
+
+- Every transition is validated; invalid transitions raise `LifecycleError`.
+- `Runtime.start()` (async): load config → configure logging → create
+  registry/bus/storage/health → register all four as services → health checks
+  → `StorageManager.ensure_directories()` → dependency-ordered
+  `registry.start_all()` → publish `RuntimeStarted` → `RUNNING`. Any failure
+  runs cleanup (stop started services, close bus, flush logs) and ends in
+  `STOPPED`, never `RUNNING`.
+- `Runtime.stop()` is idempotent and safe before start: stop services in
+  reverse dependency order → publish `RuntimeStopping` and `RuntimeStopped` →
+  close the bus → flush logs → `STOPPED`.
+- Health (`jarvis/core/health.py`): five checks — `core` (lifecycle state),
+  `configuration` (loaded + validated), `event_bus` (open and accepting),
+  `service_registry` (registered + started), `storage` (data root writable).
+  Overall status = HEALTHY only when every check is HEALTHY, DEGRADED when at
+  least one is DEGRADED, otherwise UNHEALTHY.
+
 ## 6. Event System
 
 All module-to-module coupling that is not a direct service call goes through
@@ -131,12 +158,27 @@ AIResponseStarted          ToolFailed             TaskCompleted
 AIResponseCompleted        PermissionRequested    TaskFailed
 OpenCodeConnected          PermissionGranted      MemoryCreated
 OpenCodeDisconnected       PermissionDenied       MemoryRetrieved
-OpenCodeEventReceived      ...
+OpenCodeEventReceived      RuntimeStarted         RuntimeStopping
+RuntimeStopped             ...
 ```
 
 Event envelope: `{id, type, timestamp, session_id?, task_id?, source, payload}`.
 The bus must support publish/subscribe, per-type routing, and ordered
 delivery per source. Persisted event logs are part of observability.
+
+### Phase 1 implementation
+
+`jarvis/events/models.py` defines the immutable `Event` envelope (above) and
+the catalog of event-type constants; `RuntimeStarted`/`RuntimeStopping`/
+`RuntimeStopped` were added in Phase 1 to report lifecycle transitions on the
+bus. `jarvis/events/bus.py` implements `EventBus`:
+
+- `subscribe(type | None, handler)` / `unsubscribe` / `clear`; handlers may be
+  sync callables or coroutines.
+- `publish(event)` is ordered (subscribers run in subscription order) and
+  isolated: one failing subscriber is logged, never aborts the bus.
+- `publish_nowait` schedules without awaiting; `close()` is idempotent and
+  rejects further publishes with `EventError`.
 
 ## 7. Storage Layout (Windows)
 
@@ -166,6 +208,21 @@ Structured logs (JSON) with fields: `timestamp, session_id, task_id, component,
 event, action, result, duration, error`. Goal: the user can ask "what were you
 doing for the last two hours?" and J.A.R.V.I.S. can reconstruct its activity
 from logs + task history.
+
+### Phase 1 implementation
+
+`jarvis/observability/logging.py`:
+
+- `setup_logging(cfg, logs_dir, console=True)` configures the `jarvis`
+  logger: one JSON record per line to stdout and a rotating
+  `<logs_dir>/jarvis.log` (10 MB, `backupCount = retention_days`).
+- Records carry `timestamp, level, logger, message, component, event_id,
+  session_id, task_id` plus any extra context; correlation IDs are bound via
+  `correlation()` context manager (context variables), so logs inside a
+  task/session inherit them automatically.
+- Redaction: values under secret-shaped keys (`apiKey`, `password`, `token`,
+  `secret`, `authorization`, …) and URL userinfo are masked (`***`) in JSON
+  output as defense in depth — logging code must still never log credentials.
 
 ## 9. Verification (Definition of "done")
 

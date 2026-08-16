@@ -1,9 +1,9 @@
 # Core Interfaces
 
-> Phase 0 contract. These interfaces are **design contracts** — they dictate
-> signatures, semantics, and schema for implementation in later phases.
-> Notation: Python typing + dataclass sketches; exact package layout may shift
-> during Phase 1 implementation, but the semantics must not.
+> Status: **Phase 1 implementation notes added**. Sections 6 and 7 are now
+> implemented (`jarvis.core.registry`, `jarvis.configuration`); the remaining
+> sections stay design contracts for later phases. Notation: Python typing +
+> dataclass sketches; exact package layout may shift, semantics must not.
 
 ## 1. AIProvider Abstraction
 
@@ -172,6 +172,17 @@ class ServiceRegistry(Protocol):
 
 Startup order is derived from the dependency graph; shutdown is reverse order.
 
+### Phase 1 implementation (`jarvis/core/registry.py`)
+
+`ServiceRegistry` matches the contract with one deviation: services are
+registered with **positional dependencies** (`register(name, service,
+dependencies=("...",))`) and `resolve()` is `get()`-like; there is no
+per-service `health()` yet — component health is centralized in the runtime's
+health registry. `start_all()` topologically orders services (cycles and
+missing dependencies are rejected at registration), calls `start()` if
+present, and rolls back (reverse stop) the services already started if any
+service fails to start.
+
 ## 7. Configuration Surface
 
 ```python
@@ -183,6 +194,44 @@ class Config(Protocol):
 
 Validated on load against the documented schema (`docs/CONFIGURATION.md`).
 Invalid config = refused startup, never silent fallback.
+
+### Phase 1 implementation (`jarvis/configuration/`)
+
+The Phase 0 dotted-get surface became executable as typed records instead:
+
+```python
+load_config(config_path: str | Path | None = None,
+            environ: Mapping[str, str] | None = None) -> LoadedConfig
+# LoadedConfig(config: JarvisConfig, source: str, config_path: Path | None)
+```
+
+- Precedence (low → high): built-in defaults → YAML file → `JARVIS_*`
+  environment variables. CLI `--config PATH` selects the file; env
+  `JARVIS_CONFIG_PATH` also selects it; otherwise `config/jarvis.yaml` in the
+  repo root is used if present.
+- `JarvisConfig` (frozen dataclasses: `core, logging, events, ai, memory,
+  tasks, tools, security, voice`) is typed and immutable — raw dicts are
+  never exposed after loading.
+- `validate(raw)` reports every schema problem as
+  `ConfigProblem(section, field, value, expected)`; missing provider fields,
+  unknown fields/sections, wrong types, and out-of-range values are all
+  refused. `apply_env` only recognizes schema-documented `JARVIS_SECTION__FIELD`
+  variables (double underscore), e.g. `JARVIS_LOGGING__LEVEL`,
+  `JARVIS_AI__PROVIDERS__OPENCODE__BASE_URL`, `JARVIS_SECURITY__DEFAULT_MODE`.
+- Invalid configuration raises `ConfigurationError`; the CLI never starts the
+  runtime on invalid config and never logs secret values.
+
+The Phase 1 CLI surface (`jarvis` console script, `jarvis/cli.py`):
+
+```text
+jarvis --version                     → "jarvis 0.2.0", exit 0
+jarvis --help
+jarvis config validate [--config PATH]   → "Configuration valid." + "Source: …"
+jarvis health [--config PATH]            → per-component + Overall health table
+```
+
+Exit codes: `0` success, `1` general failure (e.g. runtime failed to start),
+`2` invalid configuration/input.
 
 ## 8. Provider Health Contract
 

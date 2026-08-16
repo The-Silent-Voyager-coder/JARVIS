@@ -47,17 +47,30 @@ pytest                     # full suite (dev extra)
 pytest -m safety           # safety subset — must pass before any release
 pytest tests/opencode      # mock-server OpenCode integration
 pytest --cov=jarvis --cov-report=term-missing
+ruff check .               # linter
+mypy jarvis                # type checker (dev extra)
 ```
 
 Target: ≥80% coverage on `jarvis/` modules; 100% on `security/` decision paths.
 
-## 6. CI (later)
+## 6. Phase 1 baseline
+
+- 95 tests across `tests/unit/configuration|events|core|observability` and
+  `tests/integration/test_cli.py`; coverage 93% (`jarvis/`).
+- Key behaviors proven by tests: config precedence + env override + provider
+  repair-by-defaults; strict validation output; event ordering, filtering and
+  subscriber-failure isolation; topological registry start/stop with rollback;
+  lifecycle transitions incl. startup-failure cleanup; idempotent shutdown;
+  health aggregation; secret redaction and correlation-ID inheritance in JSON
+  logs; CLI help/version/validate/health and exit codes 0/1/2.
+
+## 7. CI (later)
 
 Phase 1+ adds a local pre-commit hook or GitHub Actions (free tier) running
 lint (ruff), type checks (mypy), and the suite. Zero-cost constraint applies:
 no paid CI services.
 
-## 7. Rules
+## 8. Rules
 
 - Never weaken a test to make a build pass.
 - Never mark a failing test "skipped" without a tracked issue + reason.

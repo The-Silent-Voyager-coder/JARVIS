@@ -68,7 +68,26 @@ C:\JARVIS\backups\      archives for Google Drive
 
 ## 6. Implementation Notes (Phase 1)
 
-- Loader: YAML parse → merge env overrides → validate against schema
-  (JSON-Schema draft 2020-12 or equivalent) → freeze into immutable `Config`.
-- Expose read-only `Config` object via service registry.
-- Provide `jarvis config validate` CLI command early (Phase 1).
+Phase 1 ships the complete loader, validator, and CLI:
+
+- **Loader** (`jarvis/configuration/loader.py`): deep-merges built-in defaults
+  (`defaults.py`, mirroring `config/jarvis.example.yaml`) → YAML file (selected
+  by `--config PATH` or `JARVIS_CONFIG_PATH`, else `config/jarvis.yaml` if
+  present) → `JARVIS_*` environment variables → validates → freezes into typed
+  records.
+- **Validation** (`jarvis/configuration/validation.py`): schema-driven; every
+  problem is reported as `section.field = value, Expected: …`; unknown
+  sections/fields, wrong types, bad enums, non-absolute paths, invalid
+  http(s) URLs (port 1–65535), and missing provider fields are refused with
+  `ConfigurationError` — no silent fallbacks, no secrets in messages.
+- **Typed config** (`jarvis/configuration/model.py`): frozen dataclasses
+  (`JarvisConfig` + per-section records, `SecurityMode`/`RiskLevel` StrEnums);
+  raw dicts never escape the loader.
+- **Env vars**: only schema-documented keys are recognized
+  (`JARVIS_SECTION__FIELD`, `JARVIS_AI__PROVIDERS__<NAME>__<FIELD>`);
+  unknown `JARVIS_*` keys are ignored, and unparseable values fail with a
+  `ConfigurationError` naming the variable.
+- **CLI**: `jarvis config validate [--config PATH]` prints `Configuration
+  valid.` + `Source:` (resolved path or `built-in defaults`), exits `0`/`2`.
+- The `Config` object is exposed via the runtime: `Runtime.config
+  (jarvis.configuration.model.JarvisConfig)`.
