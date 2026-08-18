@@ -105,3 +105,26 @@ so the core stays provider-agnostic: `generate`/`stream` map to session
 message endpoints, `tool_call` maps to delegating a task, `health_check` maps
 to `/global/health`, `cancel` maps to abort. The OpenCode-specific session
 lifecycle stays inside `integration/`.
+
+## 7. Phase 2 Implementation (`jarvis/intelligence/opencode.py`)
+
+Phase 2 lands the **provider connection** only — no delegation workflow, no
+permission response, no agent loop:
+
+- Adapter id `opencode`, capabilities `[REMOTE, CODE_EXECUTION, CANCELLATION,
+  TEXT_GENERATION]` — STREAMING and TOOL_CALLING are **not** advertised in
+  Phase 2, so requesting them raises an explicit `ProviderCapabilityError`
+  instead of a silent fallback.
+- `init()`/`health()` probe `GET /global/health` (plus an optional best-effort
+  `GET /doc` spec fetch for metadata); an unreachable or non-OpenCode endpoint
+  ends in `UNAVAILABLE` — the runtime and the CLI keep working.
+- Generation: `POST /session` → `POST /session/:id/prompt` with
+  `prompt_async`; sessions are best-effort cleaned up (`DELETE`). Bearer
+  auth from `api_key_env` (read from the environment once, never from source).
+- What Phase 3+ adds: SSE `/event` streaming (`STREAMING` capability),
+  tool/authority delegation with permission decisions from the JARVIS
+  security layer, task handoff and diff review — all gated behind the
+  capabilities the provider then advertises.
+- Deferred pieces (§2–§5 of this doc) remain design contracts; the adapter
+  is deliberately narrower than the eventual client so nothing in Phase 2
+  depends on unverified endpoints.

@@ -27,3 +27,19 @@ class EventError(JarvisError):
 
 class ValidationError(JarvisError):
     """Input did not pass validation."""
+
+
+class ProviderError(JarvisError):
+    """A provider adapter failed (network, malformed response, service error)."""
+
+
+class ProviderUnavailableError(ProviderError):
+    """The provider endpoint is unreachable or the provider is not ready."""
+
+
+class ProviderCapabilityError(ProviderError):
+    """The requested behavior is not supported by this provider's capabilities."""
+
+
+class RoutingError(JarvisError):
+    """No provider could be selected for the request (policy + availability)."""

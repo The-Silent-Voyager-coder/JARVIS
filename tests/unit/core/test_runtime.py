@@ -123,7 +123,9 @@ def test_health_components_registered(valid_config_yaml: Path) -> None:
             "event_bus": "HEALTHY",
             "service_registry": "HEALTHY",
             "storage": "HEALTHY",
+            "intelligence": reports["intelligence"],  # env-dependent provider state
         }
+        assert reports["intelligence"] in ("HEALTHY", "DEGRADED", "UNHEALTHY")
         await runtime.stop()
 
         after = {r.component: r.status.value for r in runtime.health_report()}

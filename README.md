@@ -14,30 +14,37 @@ long-running objectives, and recover from failures.
 | Platform | Windows 11 (ASUS Gaming V16, RTX 4050 6 GB VRAM, 16 GB RAM) |
 | Cost | ₹0 / $0 — no paid APIs, no paid hosting, no paid cloud |
 | Language | Python 3.11+ |
-| Status | **Phase 1 — Core Runtime** (lifecycle, configuration, events, CLI) |
+| Status | **Phase 2 — Intelligence layer** (multi-provider AI abstraction, router, CLI) |
 
 ---
 
-## Current Status (Phase 1)
+## Current Status (Phase 2)
 
-Phase 1 delivers a running core runtime:
+Phase 1 delivers a running core runtime (below); Phase 2 adds the intelligence
+layer on top of it:
 
-- **Types-first configuration**: defaults → `config/jarvis.yaml` →
-  `JARVIS_*` environment variables, validated against a schema and frozen into
-  typed records (`jarvis.configuration`)
-- **Event bus**: ordered dispatch, subscriber failure isolation, graceful
-  close (`jarvis.events`)
-- **Lifecycle**: `CREATED → INITIALIZING → RUNNING → STOPPING → STOPPED` with
-  startup-failure cleanup (`jarvis.core`)
-- **Service registry**: dependency-ordered start/stop with rollback on
-  failure
-- **Health**: component health checks + overall status
-- **Structured logging**: JSON on stdout and `<logs_dir>/jarvis.log`
-  (rotating), correlation IDs, secret redaction (`jarvis.observability`)
-- **CLI**: `jarvis config validate`, `jarvis health`, `--help`, `--version`
+- **Provider abstraction** (`jarvis.intelligence`): provider-neutral
+  `AIRequest`/`AIResponse`/`StreamChunk` models, a capability model
+  (`TEXT_GENERATION`, `STREAMING`, `TOOL_CALLING`, `CODE_EXECUTION`, …),
+  explicit provider states (READY/DEGRADED/UNAVAILABLE/FAILED), and a
+  registry with per-provider health — a failed provider never crashes the
+  runtime
+- **Adapters**: `local` (Ollama via `/api/chat`, models discovered from
+  `/api/tags`, no downloads) and `opencode` (remote code-execution provider,
+  Phase 2 = connection only: `/global/health`, `/doc`, sessions, `prompt_async`)
+- **Deterministic router**: explicit selection > capability filter >
+  availability > policy (coding → code-execution provider) > local-only
+  preference. Explicit selection never silently falls back.
+- **Mock provider**: deterministic, offline, used by tests and as a safe
+  default
+- **Read-only benchmark**: CPU/RAM/GPU/VRAM/Ollama diagnostics, nothing
+  downloaded, nothing stressed
+- **CLI**: `jarvis ai health|providers|benchmark [--config PATH] [--json]`
+- **No new dependencies**: stdlib-only HTTP transport; PyYAML remains the
+  sole runtime dependency
 
-**Not yet implemented**: AI providers, OpenCode integration, memory, tools,
-voice, vision, autonomy, HUD (Phases 2–10).
+**Not yet implemented**: memory, tools, voice, vision, autonomy, HUD,
+full OpenCode delegation (Phases 3–10).
 
 ## Development Phases
 
@@ -45,7 +52,7 @@ voice, vision, autonomy, HUD (Phases 2–10).
 |---|---|---|
 | 0 | Architecture & foundation | **Done** |
 | 1 | Core runtime (lifecycle, config, events, CLI) | **Done** |
-| 2 | Intelligence (AIProvider abstraction, model router) | Not started |
+| 2 | Intelligence (AIProvider abstraction, model router) | **Done** |
 | 3 | Memory (SQLite, provenance) | Not started |
 | 4 | Tools (files, terminal, apps, git, browser) | Not started |
 | 5 | OpenCode integration | Not started |
@@ -62,6 +69,12 @@ jarvis/
 ├── docs/            → architecture & engineering documents (read first)
 ├── config/          → example configuration
 ├── jarvis/          → Python package; one module per subsystem
+│   ├── core/            → lifecycle, registry, health, runtime
+│   ├── configuration/   → typed config loader + validator
+│   ├── events/          → event bus + catalog
+│   ├── observability/   → structured logging
+│   ├── intelligence/    → providers, models, router, benchmark (Phase 2)
+│   └── ...              → memory, tools, voice, autonomy (later phases)
 ├── tests/           → test suite (per-module subdirectories)
 ├── .env.example     → secret template (real secrets never committed)
 └── pyproject.toml   → project metadata; PyYAML is the only runtime dependency
@@ -81,13 +94,24 @@ python -m venv .venv
 # boot the runtime and report component health
 .\.venv\Scripts\jarvis.exe health
 
+# inspect the AI provider layer (works with Ollama running or absent)
+.\.venv\Scripts\jarvis.exe ai health
+.\.venv\Scripts\jarvis.exe ai providers
+.\.venv\Scripts\jarvis.exe ai benchmark
+
 # run the test suite, linter, and type checker
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -m ruff check .
 .\.venv\Scripts\python.exe -m mypy jarvis
 ```
 
-Exit codes: `0` success, `1` general failure, `2` invalid configuration/input.
+Exit codes: `0` success, `1` general failure (e.g. a provider unhealthy),
+`2` invalid configuration/input.
+
+The `ai` commands probe configured providers (`ai.providers.*`); Ollama
+absent or not running is fine — the provider reports `unavailable` and the
+CLI still exits cleanly (exit `1` from `ai health`). No models are ever
+downloaded by J.A.R.V.I.S.
 
 ## Reading Order
 

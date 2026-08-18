@@ -46,6 +46,7 @@
 pytest                     # full suite (dev extra)
 pytest -m safety           # safety subset — must pass before any release
 pytest tests/opencode      # mock-server OpenCode integration
+pytest tests/unit/intelligence   # Phase 2 provider suite
 pytest --cov=jarvis --cov-report=term-missing
 ruff check .               # linter
 mypy jarvis                # type checker (dev extra)
@@ -63,6 +64,25 @@ Target: ≥80% coverage on `jarvis/` modules; 100% on `security/` decision paths
   lifecycle transitions incl. startup-failure cleanup; idempotent shutdown;
   health aggregation; secret redaction and correlation-ID inheritance in JSON
   logs; CLI help/version/validate/health and exit codes 0/1/2.
+
+## 6a. Phase 2 baseline (intelligence layer)
+
+- 199 tests total (95 → 199). New suites under `tests/unit/intelligence/`:
+  models (validation + serialization), provider registry (register/get/
+  health/all-states), mock provider (deterministic output, streaming,
+  configurable failure/latency), router (10 scenarios, 100% coverage —
+  explicit selection never falls back, capability/availability/model filters,
+  coding→CODE_EXECUTION preference, local-only preference), Ollama + OpenCode
+  adapters against an in-process fake HTTP server (`conftest.py` →
+  `ThreadingHTTPServer` with scripted routes), benchmark, and the
+  IntelligenceService facade (events, failure isolation, health registration).
+  CLI integration tests added: `ai health|providers|benchmark` incl. `--json`
+  and exit codes (0 healthy, 1 any-unhealthy, 2 config error).
+- **No real services in tests**: fake servers only; no internet, no API keys,
+  no model downloads. Mock provider is born READY so unit tests never touch
+  the network.
+- Provider failure isolation is a concrete test: both adapters pointed at a
+  dead endpoint produce UNAVAILABLE health and the service/CLI survive.
 
 ## 7. CI (later)
 

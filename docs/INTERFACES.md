@@ -1,8 +1,10 @@
 # Core Interfaces
 
-> Status: **Phase 1 implementation notes added**. Sections 6 and 7 are now
-> implemented (`jarvis.core.registry`, `jarvis.configuration`); the remaining
-> sections stay design contracts for later phases. Notation: Python typing +
+> Status: **Phase 2 implementation notes added**. Sections 1 and 8 are now
+> implemented as the provider abstraction and health contract
+> (`jarvis.intelligence`); sections 6 and 7 remain implemented
+> (`jarvis.core.registry`, `jarvis.configuration`); the remaining sections
+> stay design contracts for later phases. Notation: Python typing +
 > dataclass sketches; exact package layout may shift, semantics must not.
 
 ## 1. AIProvider Abstraction
@@ -65,6 +67,57 @@ Future providers: registration via config (type + factory), no core changes.
 configurable criteria: task class (coding vs reasoning vs quick reply),
 provider health, availability, resource budget. Routes are config-driven
 (`config/jarvis.example.yaml → ai`), never hard-coded in core.
+
+### Phase 2 implementation (`jarvis/intelligence/`)
+
+The Phase 0 sketch became an executable provider layer. The core-facing
+surface differs in names but preserves every semantic:
+
+```python
+# jarvis/intelligence/models.py
+class AIRequest:            # was GenerationRequest
+    request_id: str
+    messages: list[Message] # role: system|user|assistant|tool; content is
+                            # str or list[TextPart | ToolCallPart]
+    system_prompt: str | None
+    model: str | None
+    temperature: float | None
+    max_tokens: int | None
+    tools: list[ToolDefinition] | None
+    metadata: dict          # e.g. {"task_kind": "coding", "provider": ...}
+    timeout: float | None
+
+class AIResponse:           # was GenerationResult
+    request_id: str
+    provider: str
+    model: str
+    content: str
+    finish_reason: FinishReason
+    usage: TokenUsage | None    # None when provider reports nothing
+    tool_calls: list[ToolCall] | None
+    metadata: dict
+
+class StreamChunk:          # provider-neutral streaming unit
+    kind: "text" | "tool_call" | "metadata" | "completion" | "error"
+```
+
+- `AIProvider` (abstract base in `jarvis/intelligence/provider.py`) exposes
+  `provider_id()`, `capabilities()`, `health()`, `init()`/`stop()`,
+  `generate(request)` (async), `stream(request)` (async generator), and
+  `cancel(request_id)`. `stream()` is gated on the STREAMING capability and
+  raises `ProviderCapabilityError` otherwise — unsupported features are
+  explicit errors, never silent no-ops.
+- Capabilities are an enum (`Capability`): TEXT_GENERATION, STREAMING,
+  TOOL_CALLING, VISION, STRUCTURED_OUTPUT, CANCELLATION, LOCAL, REMOTE,
+  CODE_EXECUTION. Providers advertise only what they actually support.
+- Requests validate on construction (empty messages, tool messages without
+  `tool_call_id`, temperature/max_tokens/timeout ranges).
+- Mock provider (`jarvis/intelligence/mock.py`): deterministic responses,
+  streaming, configurable latency/failure, born READY — the test workhorse
+  and fail-safe default.
+- Adapters (`ollama.py`, `opencode.py`) talk HTTP via stdlib `urllib`; the
+  `transport.py` helper distinguishes server errors from network failures so
+  unreachable services degrade to UNAVAILABLE instead of raising.
 
 ## 2. Event Envelope
 
@@ -221,13 +274,16 @@ load_config(config_path: str | Path | None = None,
 - Invalid configuration raises `ConfigurationError`; the CLI never starts the
   runtime on invalid config and never logs secret values.
 
-The Phase 1 CLI surface (`jarvis` console script, `jarvis/cli.py`):
+The Phase 1/2 CLI surface (`jarvis` console script, `jarvis/cli.py`):
 
 ```text
-jarvis --version                     → "jarvis 0.2.0", exit 0
+jarvis --version                     → "jarvis 0.3.0", exit 0
 jarvis --help
 jarvis config validate [--config PATH]   → "Configuration valid." + "Source: …"
 jarvis health [--config PATH]            → per-component + Overall health table
+jarvis ai health [--config PATH] [--json]     → provider health (exit 1 if any unhealthy)
+jarvis ai providers [--config PATH] [--json]  → registered providers + capabilities
+jarvis ai benchmark [--config PATH] [--json]  → read-only hardware diagnostics
 ```
 
 Exit codes: `0` success, `1` general failure (e.g. runtime failed to start),
@@ -248,3 +304,13 @@ class ProviderHealth:
 
 The router uses this for failover decisions: unhealthy opencode → route
 elsewhere or report, never hang indefinitely.
+
+### Phase 2 implementation
+
+`jarvis/intelligence/provider.py` implements exactly this shape as
+`ProviderHealth` (`provider_id`, `ok`, `latency_ms`, `model_loaded`,
+`detail`, `last_check`) plus a `to_dict()` for CLI/JSON output. `health()`
+never raises: unreachable providers return `ok=False` with a detail string,
+and stopped providers short-circuit before probing. The `intelligence`
+runtime health check aggregates providers — HEALTHY when at least one
+provider is healthy, UNHEALTHY when none are.

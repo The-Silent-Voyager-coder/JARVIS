@@ -1,9 +1,9 @@
 # Architecture
 
-> Status: **Phase 1 — core runtime implemented**. This is the contract that all
-> modules must honor. It may be refined by the architect, but not silently
-> violated by implementation. Phase 1 adds full detail for the runtime,
-> events, configuration, and observability sections that Phase 0 sketched.
+> Status: **Phase 2 — intelligent provider layer implemented**. This is the
+> contract that all modules must honor. It may be refined by the architect,
+> but not silently violated by implementation. Phase 2 adds full detail for
+> the intelligence section that Phase 0 sketched and Phase 1 listed.
 
 ## 1. Mission
 
@@ -132,18 +132,126 @@ CREATED → INITIALIZING → RUNNING → STOPPING → STOPPED
 - Every transition is validated; invalid transitions raise `LifecycleError`.
 - `Runtime.start()` (async): load config → configure logging → create
   registry/bus/storage/health → register all four as services → health checks
-  → `StorageManager.ensure_directories()` → dependency-ordered
-  `registry.start_all()` → publish `RuntimeStarted` → `RUNNING`. Any failure
-  runs cleanup (stop started services, close bus, flush logs) and ends in
-  `STOPPED`, never `RUNNING`.
+  → `StorageManager.ensure_directories()` → start the Intelligence service →
+  dependency-ordered `registry.start_all()` → publish `RuntimeStarted` →
+  `RUNNING`. Any failure runs cleanup (stop started services, close bus, flush
+  logs) and ends in `STOPPED`, never `RUNNING`.
 - `Runtime.stop()` is idempotent and safe before start: stop services in
   reverse dependency order → publish `RuntimeStopping` and `RuntimeStopped` →
   close the bus → flush logs → `STOPPED`.
-- Health (`jarvis/core/health.py`): five checks — `core` (lifecycle state),
+- Health (`jarvis/core/health.py`): six checks — `core` (lifecycle state),
   `configuration` (loaded + validated), `event_bus` (open and accepting),
-  `service_registry` (registered + started), `storage` (data root writable).
+  `service_registry` (registered + started), `storage` (data root writable),
+  and `intelligence` (at least one provider healthy — added in Phase 2).
   Overall status = HEALTHY only when every check is HEALTHY, DEGRADED when at
   least one is DEGRADED, otherwise UNHEALTHY.
+
+## 5.1 Intelligence Layer (Phase 2)
+
+The intelligence layer (`jarvis/intelligence/`) implements the Phase 0
+`AIProvider` abstraction: provider-neutral models, a provider interface,
+registry, deterministic router, adapters, mock provider, read-only benchmark,
+and the service facade the runtime owns.
+
+### Package layout
+
+```text
+jarvis/intelligence/
+├── models.py      provider-neutral AIRequest/AIResponse/StreamChunk/Message/
+│                  TokenUsage/ToolCall - the only types the core sees
+├── provider.py    ProviderState, ProviderCapabilities, AIProvider ABC,
+│                  ProviderHealth; failures become states, never crashed loops
+├── registry.py    ProviderRegistry: register (dup-id rejected), get,
+│                  enumerate, health, initialize/shutdown, snapshot
+├── router.py      deterministic Router + Route record
+├── transport.py   stdlib urllib JSON/text helpers (PyYAML stays the only
+│                  third-party runtime dependency)
+├── ollama.py      OllamaProvider (local) - /api/tags health + /api/chat
+├── opencode.py    OpenCodeProvider (remote) - /global/health, /doc, session,
+│                  prompt_async - connection only in Phase 2, no delegation
+├── mock.py        MockProvider - deterministic, born READY, configurable
+│                  failure/latency/capabilities, used heavily in tests
+├── benchmark.py   read-only hardware diagnostics (CPU/RAM/GPU/VRAM/Ollama)
+│                  - no downloads, no GPU stress, stdlib only
+└── service.py     IntelligenceService facade owned by the Runtime
+```
+
+### Core models (`models.py`)
+
+`AIRequest`: `messages`, `request_id`, `system_prompt`, `model`,
+`temperature`, `max_tokens`, `tools`, `metadata`, `timeout`. Validation:
+non-empty messages, tool messages need `tool_call_id`, temperature in
+0.0..2.0, positive `max_tokens`/`timeout`. Messages carry `Role`
+(system/user/assistant/tool) and either plain text or structured content
+parts (`TextPart`/`ToolCallPart`).
+
+`AIResponse`: `request_id`, `provider`, `model`, `content`, `finish_reason`,
+`usage`, `tool_calls`, `metadata`. `TokenUsage` fields are `None` when the
+provider does not report them — counts are **never fabricated**.
+
+Streaming contract: `async for chunk in provider.stream(request)` yields
+`StreamChunk` with kind `text` | `tool_call` | `metadata` | `completion` |
+`error`. Streaming is capability-gated: requesting it from a non-streaming
+provider is an explicit `ProviderCapabilityError`, never a silent fallback.
+
+### Capabilities and states (`provider.py`)
+
+`Capability`: TEXT_GENERATION, STREAMING, TOOL_CALLING, VISION,
+STRUCTURED_OUTPUT, CANCELLATION, LOCAL, REMOTE, CODE_EXECUTION. Every
+provider declares its set; the router filters on it.
+
+`ProviderState`: UNINITIALIZED → INITIALIZING → READY | DEGRADED |
+UNAVAILABLE | FAILED → STOPPING → STOPPED. `init()` never raises: an
+unreachable target ends UNAVAILABLE, a malformed service ends DEGRADED, and
+`health()` is a fail-safe probe that also never raises. A stopped provider
+reports not-ok.
+
+### Registry (`registry.py`)
+
+Duplicate provider ids are rejected with `ServiceError`. Registry-level
+iteration is failure-isolated: `health_all()` probes every provider and
+reports per-provider results without raising on any single failure.
+
+### Deterministic router (`router.py`)
+
+Pipeline: request → capability filter → availability filter → policy →
+selected provider. Ordered rules:
+
+1. Explicit selection (request metadata `provider`, else the configured
+   default) is **never** overridden — an unavailable explicitly-selected
+   provider is a hard error, no fallback.
+2. Capability filter: required set = TEXT_GENERATION + STREAMING (if
+   requested) + TOOL_CALLING (if tools declared) + CODE_EXECUTION (for
+   `task_kind: coding`); providers missing any are dropped.
+3. Availability filter: only READY providers.
+4. Model filter: a request `model` outside a provider's advertised
+   `model_ids` drops it.
+5. Policy: coding tasks prefer the remote code-execution provider; otherwise
+   a local-only provider is preferred; otherwise the first capable candidate.
+
+Every `Route` records `request_id`, `requested_provider`, `selected_provider`,
+`reason`, and `alternatives` — routing decisions are always observable and
+published as `AIProviderSelected`.
+
+### Service facade (`service.py`)
+
+`IntelligenceService` owns the registry + router, constructs adapters from
+`ai.providers` config, exposes `generate` / `stream` / `cancel`, publishes
+the `AI*` event stream, and registers the `intelligence` runtime health check
+(HEALTHY when at least one provider is healthy). Provider failures surface as
+events + states; they never crash the runtime, the bus, or other providers.
+
+### Adapters
+
+- **OllamaProvider** (`local`): probes `/api/tags`, generates via
+  `/api/chat`, streams newline-delimited JSON, never downloads models. When
+  Ollama is absent the provider reports UNAVAILABLE and the runtime keeps
+  working.
+- **OpenCodeProvider** (`opencode`): `/global/health` + `/doc` (OpenAPI 3.1)
+  for connectivity, `/session/*` for session lifecycle, `prompt_async` for
+  generation. Phase 2 scope is provider connection only — no authority
+  delegation, no agent loop. API key (when configured) is read from the
+  environment variable named by `api_key_env`, never from source.
 
 ## 6. Event System
 
@@ -160,6 +268,16 @@ OpenCodeConnected          PermissionGranted      MemoryCreated
 OpenCodeDisconnected       PermissionDenied       MemoryRetrieved
 OpenCodeEventReceived      RuntimeStarted         RuntimeStopping
 RuntimeStopped             ...
+```
+
+Phase 2 added the intelligence event family (all published by the
+IntelligenceService, payloads are JSON-safe and never include prompts or
+secrets):
+
+```text
+AIRequestStarted         AIProviderSelected      AIStreamStarted
+AIRequestCompleted       AIProviderUnavailable   AIStreamCompleted
+AIRequestFailed                                  AIStreamFailed
 ```
 
 Event envelope: `{id, type, timestamp, session_id?, task_id?, source, payload}`.

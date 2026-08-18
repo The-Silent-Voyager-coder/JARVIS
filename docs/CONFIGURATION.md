@@ -91,3 +91,47 @@ Phase 1 ships the complete loader, validator, and CLI:
   valid.` + `Source:` (resolved path or `built-in defaults`), exits `0`/`2`.
 - The `Config` object is exposed via the runtime: `Runtime.config
   (jarvis.configuration.model.JarvisConfig)`.
+
+## 7. AI Provider Configuration (Phase 2)
+
+The `ai.*` schema drives the intelligence layer (`jarvis.intelligence`):
+
+```yaml
+ai:
+  default_provider: local                      # explicit selection when no
+                                               # hint in the request
+  providers:
+    local:
+      type: local                              # Ollama adapter
+      enabled: true
+      base_url: http://127.0.0.1:11434
+      model: ""                                # provider decides
+      timeout_seconds: 60
+    opencode:
+      type: opencode
+      enabled: false                           # off by default
+      base_url: http://127.0.0.1:4096
+      api_key_env: ""                          # e.g. "OPENCODE_API_KEY"
+      timeout_seconds: 120
+```
+
+Semantics:
+
+- `providers.<name>.type` is an enum: `local` (Ollama adapter) or `opencode`
+  (remote). Unknown or disabled types are not registered.
+- `base_url` must be a valid http(s) URL (validated with port range).
+- `api_key_env` names an environment variable; the value is read once at
+  start and used for Bearer auth. Never put the key itself in YAML.
+- `model` is the default model hint for the provider; the provider decides
+  when empty (`/api/tags` for Ollama) and the router drops providers whose
+  advertised models exclude an explicit request model.
+- The default config (`config/jarvis.example.yaml`, `configuration/defaults.py`)
+  enables the local provider only; opencode is disabled until the operator
+  flips it on. A missing `ai:` section is valid — defaults apply.
+- `default_provider` is a fallback, not a pin: explicit request metadata
+  (`metadata.provider`) wins, and an explicitly selected provider that is
+  unhealthy is a routing error — never a silent switch to another provider.
+
+CLI: `jarvis ai health|providers|benchmark [--config PATH] [--json]`.
+`ai health` exits `1` when any provider is unhealthy (or both are
+unavailable — the CLI survives and reports), `2` on config errors.

@@ -40,6 +40,16 @@ RUNTIME_STARTED = "RuntimeStarted"
 RUNTIME_STOPPING = "RuntimeStopping"
 RUNTIME_STOPPED = "RuntimeStopped"
 
+# Phase 2 — intelligence layer
+AI_REQUEST_STARTED = "AIRequestStarted"
+AI_REQUEST_COMPLETED = "AIRequestCompleted"
+AI_REQUEST_FAILED = "AIRequestFailed"
+AI_PROVIDER_SELECTED = "AIProviderSelected"
+AI_PROVIDER_UNAVAILABLE = "AIProviderUnavailable"
+AI_STREAM_STARTED = "AIStreamStarted"
+AI_STREAM_COMPLETED = "AIStreamCompleted"
+AI_STREAM_FAILED = "AIStreamFailed"
+
 DOCUMENTED_EVENT_TYPES: frozenset[str] = frozenset(
     {
         USER_MESSAGE_RECEIVED,
@@ -67,6 +77,14 @@ DOCUMENTED_EVENT_TYPES: frozenset[str] = frozenset(
         RUNTIME_STARTED,
         RUNTIME_STOPPING,
         RUNTIME_STOPPED,
+        AI_REQUEST_STARTED,
+        AI_REQUEST_COMPLETED,
+        AI_REQUEST_FAILED,
+        AI_PROVIDER_SELECTED,
+        AI_PROVIDER_UNAVAILABLE,
+        AI_STREAM_STARTED,
+        AI_STREAM_COMPLETED,
+        AI_STREAM_FAILED,
     }
 )
 

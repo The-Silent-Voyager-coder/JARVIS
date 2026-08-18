@@ -12,7 +12,7 @@ shutdown is graceful and safe to repeat.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from jarvis.configuration.loader import load_config
 from jarvis.configuration.model import JarvisConfig
@@ -24,6 +24,9 @@ from jarvis.events.bus import EventBus
 from jarvis.events.models import RUNTIME_STARTED, RUNTIME_STOPPED, RUNTIME_STOPPING, Event
 from jarvis.exceptions import LifecycleError
 from jarvis.observability.logging import flush_logging, setup_logging
+
+if TYPE_CHECKING:
+    from jarvis.intelligence.service import IntelligenceService
 
 log = logging.getLogger("jarvis.core.runtime")
 
@@ -38,6 +41,7 @@ class Runtime:
         self._bus: EventBus | None = None
         self._storage: StorageManager | None = None
         self._health: HealthRegistry | None = None
+        self._intelligence: IntelligenceService | None = None
 
     @classmethod
     def create(cls, config_path: str | None = None) -> Runtime:
@@ -79,6 +83,12 @@ class Runtime:
             raise LifecycleError("health registry not initialized")
         return self._health
 
+    @property
+    def intelligence(self) -> IntelligenceService:
+        if self._intelligence is None:
+            raise LifecycleError("intelligence service not initialized")
+        return self._intelligence
+
     # --- lifecycle -----------------------------------------------------
 
     async def start(self) -> None:
@@ -106,6 +116,16 @@ class Runtime:
             self._health = health
 
             storage.ensure_directories()
+
+            self._register_health_checks(health)
+
+            from jarvis.intelligence.service import IntelligenceService
+
+            service = IntelligenceService()
+            self._intelligence = service
+            service.publisher = bus.publish_nowait
+            service.start(self._config)
+            service.register_health_check(health)
 
             registry.start_all()
 
@@ -135,6 +155,8 @@ class Runtime:
             self._lifecycle.transition(RuntimeState.STOPPING)
 
         bus = self._bus
+        if self._intelligence is not None:
+            self._intelligence.shutdown()
         if self._registry is not None:
             self._registry.stop_all()
 

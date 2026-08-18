@@ -5,8 +5,11 @@
 **No dependency enters `project.dependencies` without written justification.**
 
 Phase 0 shipped with **zero runtime dependencies**; Phase 1 added exactly one
-(`PyYAML`, see §5). Later phases must continue to prefer Python's standard
-library. Dependencies are added only when:
+(`PyYAML`, see §5). Phase 2 added **none** — the intelligence layer's HTTP
+transport (provider adapters, fake-server test harness, hardware benchmark)
+is pure standard library (`urllib`, `ctypes`, `shutil`, `ThreadingHTTPServer`).
+Later phases must continue to prefer Python's standard library. Dependencies
+are added only when:
 
 1. The capability is genuinely required for the current phase (no speculative
    additions for future phases), **and**

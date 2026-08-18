@@ -21,7 +21,7 @@ def test_version(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exc:
         main(["--version"])
     assert exc.value.code == 0
-    assert "jarvis 0.2.0" in capsys.readouterr().out
+    assert "jarvis 0.3.0" in capsys.readouterr().out
 
 
 def test_config_validate_valid(valid_config_yaml: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -106,3 +106,118 @@ def test_unknown_subcommand_errors() -> None:
     with pytest.raises(SystemExit) as exc:
         main(["config", "frobnicate"])
     assert exc.value.code == EXIT_INVALID
+
+
+def test_ai_benchmark_command(capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["ai", "benchmark"])
+    assert code == EXIT_OK
+    out = capsys.readouterr().out
+    assert "Hardware benchmark" in out
+    assert "platform" in out
+    assert "cpu" in out
+
+
+def test_ai_benchmark_json(capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["ai", "benchmark", "--json"])
+    assert code == EXIT_OK
+    out = capsys.readouterr().out
+    assert '"platform"' in out
+
+
+def test_ai_health_command_reports_providers(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    d = str(tmp_path).replace("\\", "/")
+    config_path = tmp_path / "ai-config.yaml"
+    config_path.write_text(
+        f"""
+core:
+  name: "ai cli test"
+  data_dir: "{d}/data"
+  cache_dir: "{d}/cache"
+  logs_dir: "{d}/logs"
+  runtime_dir: "{d}/runtime"
+  workspaces_dir: "{d}/workspaces"
+  models_dir: "{d}/models"
+  backups_dir: "{d}/backups"
+  timezone: "UTC"
+logging:
+  level: "INFO"
+  retention_days: 1
+ai:
+  default_provider: "local"
+  providers:
+    local:
+      type: "local"
+      enabled: true
+      base_url: "http://127.0.0.1:1"
+      model: ""
+      timeout_seconds: 1
+    opencode:
+      type: "opencode"
+      enabled: false
+      base_url: "http://127.0.0.1:4096"
+      api_key_env: ""
+      timeout_seconds: 1
+""",
+        encoding="utf-8",
+    )
+    code = main(["ai", "health", "--config", str(config_path)])
+    assert code == EXIT_FAILURE  # configured provider is unreachable
+    out = capsys.readouterr().out
+    assert "AI Provider Health" in out
+    assert "local" in out
+
+
+def test_ai_providers_command(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    d = str(tmp_path).replace("\\", "/")
+    config_path = tmp_path / "ai-config.yaml"
+    config_path.write_text(
+        f"""
+core:
+  name: "ai cli test"
+  data_dir: "{d}/data"
+  cache_dir: "{d}/cache"
+  logs_dir: "{d}/logs"
+  runtime_dir: "{d}/runtime"
+  workspaces_dir: "{d}/workspaces"
+  models_dir: "{d}/models"
+  backups_dir: "{d}/backups"
+  timezone: "UTC"
+logging:
+  level: "INFO"
+  retention_days: 1
+ai:
+  default_provider: "local"
+  providers:
+    local:
+      type: "local"
+      enabled: true
+      base_url: "http://127.0.0.1:1"
+      model: ""
+      timeout_seconds: 1
+    opencode:
+      type: "opencode"
+      enabled: true
+      base_url: "http://127.0.0.1:1"
+      api_key_env: ""
+      timeout_seconds: 1
+""",
+        encoding="utf-8",
+    )
+    code = main(["ai", "providers", "--config", str(config_path)])
+    assert code == EXIT_OK
+    out = capsys.readouterr().out
+    assert "local" in out
+    assert "opencode" in out
+    assert "text_generation" in out
+
+
+def test_ai_health_with_invalid_config(
+    invalid_config_yaml: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(["ai", "health", "--config", str(invalid_config_yaml)])
+    assert code == EXIT_INVALID
+    assert "Configuration error:" in capsys.readouterr().err
