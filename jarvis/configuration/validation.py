@@ -38,7 +38,7 @@ PROVIDER_NAMES = frozenset({"local", "opencode"})
 
 Kind = Literal[
     "str", "nonempty_str", "path", "positive_int", "nonneg_int", "positive_number",
-    "bool", "enum", "url", "mapping",
+    "bool", "enum", "url", "mapping", "confidence",
 ]
 
 
@@ -54,6 +54,7 @@ def _describe(kind: Kind) -> str:
         "url": "valid http(s) URL with port in 1-65535",
         "enum": "one of",
         "mapping": "mapping",
+        "confidence": "number between 0.0 and 1.0",
     }[kind]
 
 
@@ -114,8 +115,11 @@ SCHEMA: dict[str, dict[str, Field]] = {
         "providers": Field("mapping", "providers mapping"),
     },
     "memory": {
-        "sqlite_path": Field("path", _describe("path")),
+        "enabled": Field("bool", _describe("bool")),
+        "database_path": Field("path", _describe("path")),
         "auto_save_conversations": Field("bool", _describe("bool")),
+        "default_confidence": Field("confidence", _describe("confidence")),
+        "retention_days": Field("nonneg_int", _describe("nonneg_int")),
     },
     "tasks": {
         "max_iterations": Field("positive_int", _describe("positive_int")),
@@ -182,7 +186,7 @@ PROVIDER_FIELDS: dict[str, dict[str, Field]] = {
 _SCALAR_KINDS: frozenset[Kind] = frozenset(
     {
         "str", "nonempty_str", "path", "positive_int", "nonneg_int",
-        "positive_number", "bool", "enum", "url",
+        "positive_number", "bool", "enum", "url", "confidence",
     }
 )
 
@@ -249,6 +253,17 @@ def validate(raw: dict[str, Any]) -> list[ConfigProblem]:
                     _check_scalar(section, name, field, value, errors)
             elif field.kind == "mapping" and not isinstance(value, dict):
                 errors.append(_problem_for_field(field, value, section, name))
+
+    memory = raw.get("memory")
+    if isinstance(memory, dict) and memory.get("auto_save_conversations") is True:
+        errors.append(
+            ConfigProblem(
+                "memory",
+                "auto_save_conversations",
+                True,
+                "false — automatic conversation saving is not implemented (Phase 3 privacy rule)",
+            )
+        )
 
     ai = raw.get("ai")
     if isinstance(ai, dict):
@@ -336,6 +351,12 @@ def _matches(kind: Kind, value: Any) -> bool:
         return value >= 1 if kind == "positive_int" else value >= 0
     if kind == "positive_number":
         return isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
+    if kind == "confidence":
+        return (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and 0.0 <= value <= 1.0
+        )
     if kind == "nonempty_str":
         return isinstance(value, str) and bool(value.strip())
     if kind == "path":
@@ -374,6 +395,14 @@ def coerce_env(kind: Kind, raw: str) -> Any:
             return float(raw)
         except ValueError as exc:
             raise ValueError(f"expected number, got {raw!r}") from exc
+    if kind == "confidence":
+        try:
+            value = float(raw)
+        except ValueError as exc:
+            raise ValueError(f"expected number between 0.0 and 1.0, got {raw!r}") from exc
+        if not 0.0 <= value <= 1.0:
+            raise ValueError(f"expected number between 0.0 and 1.0, got {raw!r}")
+        return value
     return raw
 
 
@@ -477,8 +506,11 @@ def build_config(raw: dict[str, Any]) -> JarvisConfig:
     )
 
     memory = MemoryConfig(
-        sqlite_path=p("memory", "sqlite_path"),
+        enabled=bool(raw["memory"]["enabled"]),
+        database_path=p("memory", "database_path"),
         auto_save_conversations=bool(raw["memory"]["auto_save_conversations"]),
+        default_confidence=float(raw["memory"]["default_confidence"]),
+        retention_days=int(raw["memory"]["retention_days"]),
     )
 
     tasks = TasksConfig(

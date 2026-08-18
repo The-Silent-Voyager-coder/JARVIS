@@ -94,8 +94,11 @@ class AIConfig:
 
 @dataclass(frozen=True)
 class MemoryConfig:
-    sqlite_path: Path
+    enabled: bool
+    database_path: Path
     auto_save_conversations: bool
+    default_confidence: float
+    retention_days: int
 
 
 @dataclass(frozen=True)

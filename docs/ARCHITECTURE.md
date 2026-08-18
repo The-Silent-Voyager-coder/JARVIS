@@ -1,9 +1,9 @@
 # Architecture
 
-> Status: **Phase 2 — intelligent provider layer implemented**. This is the
+> Status: **Phase 3 — memory foundation implemented**. This is the
 > contract that all modules must honor. It may be refined by the architect,
-> but not silently violated by implementation. Phase 2 adds full detail for
-> the intelligence section that Phase 0 sketched and Phase 1 listed.
+> but not silently violated by implementation. Phase 2 added full detail for
+> the intelligence section; Phase 3 adds the memory section (§5.2).
 
 ## 1. Mission
 
@@ -80,7 +80,7 @@ verifies results before claiming success.
 | `observability/` | Structured logs, spans, activity reconstruction | 1 |
 | `interface/` | CLI, terminal/simple web/voice entry points | 1 |
 | `intelligence/` | `AIProvider` abstraction, local provider, model router, structured output, streaming | 2 |
-| `memory/` | SQLite storage, memory types, retrieval, provenance | 3 |
+| `memory/` | Memory models, SQLite storage, provenance, retrieval | 3 |
 | `tools/` | Typed tool registry (files, terminal, apps, screenshot, clipboard, git, browser) | 4 |
 | `integration/` | OpenCode client: health, sessions, events, delegation, results | 5 |
 | `voice/` | Wake word, STT, TTS, voice session management | 6 |
@@ -139,12 +139,13 @@ CREATED → INITIALIZING → RUNNING → STOPPING → STOPPED
 - `Runtime.stop()` is idempotent and safe before start: stop services in
   reverse dependency order → publish `RuntimeStopping` and `RuntimeStopped` →
   close the bus → flush logs → `STOPPED`.
-- Health (`jarvis/core/health.py`): six checks — `core` (lifecycle state),
+- Health (`jarvis/core/health.py`): seven checks — `core` (lifecycle state),
   `configuration` (loaded + validated), `event_bus` (open and accepting),
   `service_registry` (registered + started), `storage` (data root writable),
-  and `intelligence` (at least one provider healthy — added in Phase 2).
-  Overall status = HEALTHY only when every check is HEALTHY, DEGRADED when at
-  least one is DEGRADED, otherwise UNHEALTHY.
+  `intelligence` (at least one provider healthy — added in Phase 2), and
+  `memory` (memory subsystem HEALTHY — added in Phase 3). Overall status =
+  HEALTHY only when every check is HEALTHY, DEGRADED when at least one is
+  DEGRADED, otherwise UNHEALTHY.
 
 ## 5.1 Intelligence Layer (Phase 2)
 
@@ -253,6 +254,99 @@ events + states; they never crash the runtime, the bus, or other providers.
   delegation, no agent loop. API key (when configured) is read from the
   environment variable named by `api_key_env`, never from source.
 
+## 5.2 Memory Layer (Phase 3)
+
+The memory layer (`jarvis/memory/`) implements the Phase 0 memory contract:
+four memory categories, typed entries with provenance and confidence, SQLite
+persistence with schema-versioned migrations, a repository abstraction,
+deterministic retrieval with a documented ranking formula, session-scoped RAM
+working memory, memory events, and a runtime health check with failure
+isolation. See `docs/MEMORY.md` for the full contract.
+
+### Package layout
+
+```text
+jarvis/memory/
+├── models.py           MemoryType (working/long_term/episodic/semantic),
+│                       Provenance, Memory (typed entry), MemoryFilter,
+│                       RankedMemory/MemoryRetrieval, content normalization
+├── repository.py       MemoryRepository ABC + RepositoryHealth (persistence
+│                       contract the service depends on, never SQL)
+├── sqlite_repository.py SqliteMemoryRepository: stdlib sqlite3, schema
+│                       versioning + migrations, WAL, FTS5 (+ LIKE fallback),
+│                       soft delete, expire sweep, transactional writes
+├── working_memory.py   WorkingMemory + WorkingMemoryStore (per-session RAM,
+│                       TTL, lazy purge; never auto-promoted to long-term)
+├── service.py          MemoryService facade owned by the Runtime
+└── __init__.py         package surface (models, service, working memory)
+```
+
+### Core models (`models.py`)
+
+`Memory`: `id` (`mem_<hex>` UUID, never sequential), `memory_type`, `content`
+(plain string — FTS-indexed — or structured JSON `dict`/`list`), `source`,
+`provenance` (canonical kinds in the `Provenance` enum, any string allowed),
+`confidence` (0.0–1.0), `created_at`/`updated_at` (timezone-aware UTC),
+`expires_at` (nullable), `metadata`, `session_id`, `deleted_at` (auditable
+soft delete). `validate()` enforces every invariant; `to_dict(include_content)`
+supports redacted CLI/event output.
+
+`MemoryFilter` carries all deterministic filters (memory_type, source,
+provenance, created_after/before, expires_before, minimum_confidence,
+session_id, include_expired, include_deleted).
+
+### Persistence (`sqlite_repository.py`)
+
+- Schema versioning: `schema_meta` key/value table; migrations are ordered
+  stdlib SQL statements; a database with a **newer** schema version is
+  refused (never touched), a **corrupted** database degrades to
+  `unavailable` with the file **kept as-is** (never deleted to repair).
+- WAL mode, `busy_timeout`, a single connection guarded by an `RLock` —
+  a small, documented local concurrency strategy (no distributed layer).
+- Full-text search: external-content FTS5 table + sync triggers when the
+  build supports it, with a safe `LIKE ... ESCAPE '\'` fallback otherwise.
+  Search excludes expired/deleted rows by default.
+- Writes are transactional: create/update/delete/expire never leave partial
+  rows; `update()` atomically replaces the row.
+
+### Repository abstraction (`repository.py`)
+
+`MemoryRepository` ABC: `create/get/update/delete/list/search/expire/count/
+stats/initialize/close/health`. `list()`/`search()` return the full matching
+set ordered `created_at DESC, id ASC` — ranking and pagination belong to the
+service. `RepositoryHealth` reports `accessible`, `schema_valid`,
+`migrations_current`, `writable`, `fts_enabled`, `schema_version`,
+`database_path`, `detail`.
+
+### Service facade (`service.py`)
+
+`MemoryService` owns the repository + working-memory store, constructs the
+SQLite repository from `memory.database_path`, and exposes:
+
+- `remember(content, ...)` — deliberate save (never automatic), confidence
+  defaults to `memory.default_confidence`, per-type retention from
+  `memory.retention_days` for WORKING/EPISODIC when no `expires_at` given
+- `record_episode(...)` / `add_semantic(...)` — typed convenience writes
+- `retrieve(query=None, filters, limit, offset)` — deterministic ranking
+  (`0.5·relevance + 0.3·confidence + 0.2·recency`, recency =
+  `1/(1+age_days)`), each result carries a `match_reason`; pagination via
+  limit/offset; `total` counts the full match set
+- `get/update/forget` — update preserves provenance/source/type/session and
+  always bumps `updated_at`; forget is an auditable soft delete
+- `expire()` — sweeps expired memories into deleted state, emitting
+  `MemoryExpired`
+- `working(session_id)` / `drop_working_session` — RAM per-session store,
+  strict session isolation
+- `health()` / `register_health_check(...)` — registers the `memory` runtime
+  health check; HEALTHY when the DB is accessible/schema-valid/current/
+  writable, UNHEALTHY otherwise. A disabled-by-config subsystem reports
+  HEALTHY (intentional no-op); a failed init reports `unavailable` with a
+  detail string — the runtime and CLI keep running.
+
+Memory events (`MemoryCreated/Updated/Deleted/Expired/Retrieved`) carry only
+`memory_id`, `memory_type`, `source`, `provenance`, `session_id` — never
+content (privacy rule, `docs/SECURITY_MODEL.md` §8).
+
 ## 6. Event System
 
 All module-to-module coupling that is not a direct service call goes through
@@ -278,6 +372,13 @@ secrets):
 AIRequestStarted         AIProviderSelected      AIStreamStarted
 AIRequestCompleted       AIProviderUnavailable   AIStreamCompleted
 AIRequestFailed                                  AIStreamFailed
+```
+
+Phase 3 added the memory event family (published by the MemoryService;
+payloads carry ids/types/sources only, never content):
+
+```text
+MemoryCreated   MemoryUpdated   MemoryDeleted   MemoryExpired   MemoryRetrieved
 ```
 
 Event envelope: `{id, type, timestamp, session_id?, task_id?, source, payload}`.

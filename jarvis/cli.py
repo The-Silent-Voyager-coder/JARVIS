@@ -7,8 +7,15 @@ Commands:
     jarvis ai health [--config PATH]          AI provider health table
     jarvis ai providers [--config PATH]       list registered AI providers
     jarvis ai benchmark [--config PATH]       read-only hardware benchmark
+    jarvis memory health [--config PATH]      memory database health
+    jarvis memory list [--config PATH]        list memories (filters + ranking)
+    jarvis memory get <id> [--config PATH]    show one memory
+    jarvis memory delete <id> [--config PATH] delete a memory (auditable)
+    jarvis memory stats [--config PATH]       counts by type + subsystem state
+    jarvis memory search <query> [--config PATH]
 
 Exit codes: 0 success, 1 general failure, 2 invalid configuration/input.
+Memory content is never printed unless --content is passed.
 """
 
 from __future__ import annotations
@@ -24,8 +31,16 @@ from jarvis import __version__
 from jarvis.configuration.loader import load_config
 from jarvis.core.health import HealthStatus
 from jarvis.core.runtime import Runtime
-from jarvis.exceptions import ConfigurationError, JarvisError
+from jarvis.exceptions import (
+    ConfigurationError,
+    JarvisError,
+    MemoryError,
+    MemoryNotFoundError,
+    MemoryValidationError,
+)
 from jarvis.intelligence.benchmark import format_benchmark, run_benchmark
+from jarvis.memory.models import MemoryType
+from jarvis.memory.service import MemoryService
 
 EXIT_OK = 0
 EXIT_FAILURE = 1
@@ -38,6 +53,7 @@ COMPONENT_LABELS: dict[str, str] = {
     "service_registry": "Service Registry",
     "storage": "Storage",
     "intelligence": "Intelligence",
+    "memory": "Memory",
 }
 
 
@@ -89,7 +105,80 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     ai_benchmark.add_argument("--json", action="store_true", help="machine-readable output")
 
+    memory_parser = subparsers.add_parser("memory", help="memory commands")
+    memory_sub = memory_parser.add_subparsers(dest="memory_command", metavar="SUBCOMMAND")
+
+    mem_health = memory_sub.add_parser("health", help="report memory subsystem health")
+    mem_health.add_argument(
+        "--config", metavar="PATH", default=None, help="configuration file to use"
+    )
+    mem_health.add_argument("--json", action="store_true", help="machine-readable output")
+
+    mem_list = memory_sub.add_parser("list", help="list memories (ranked)")
+    mem_list.add_argument(
+        "--config", metavar="PATH", default=None, help="configuration file to use"
+    )
+    mem_list.add_argument("--json", action="store_true", help="machine-readable output")
+    mem_list.add_argument("--content", action="store_true", help="include memory content")
+    _add_memory_filter_args(mem_list)
+
+    mem_get = memory_sub.add_parser("get", help="show one memory by id")
+    mem_get.add_argument("memory_id", metavar="ID", help="memory id")
+    mem_get.add_argument(
+        "--config", metavar="PATH", default=None, help="configuration file to use"
+    )
+    mem_get.add_argument("--json", action="store_true", help="machine-readable output")
+    mem_get.add_argument("--content", action="store_true", help="include memory content")
+    mem_get.add_argument("--include-expired", action="store_true", help="allow expired memories")
+    mem_get.add_argument("--include-deleted", action="store_true", help="allow deleted memories")
+
+    mem_delete = memory_sub.add_parser("delete", help="delete memory(ies) — auditable")
+    mem_delete.add_argument("memory_id", metavar="ID", nargs="?", help="memory id to delete")
+    mem_delete.add_argument(
+        "--config", metavar="PATH", default=None, help="configuration file to use"
+    )
+    mem_delete.add_argument("--json", action="store_true", help="machine-readable output")
+    _add_memory_filter_args(mem_delete)
+    mem_delete.add_argument(
+        "--yes",
+        action="store_true",
+        help="confirm bulk deletion by filters (required for bulk deletes)",
+    )
+
+    mem_stats = memory_sub.add_parser("stats", help="memory counts and subsystem state")
+    mem_stats.add_argument(
+        "--config", metavar="PATH", default=None, help="configuration file to use"
+    )
+    mem_stats.add_argument("--json", action="store_true", help="machine-readable output")
+
+    mem_search = memory_sub.add_parser("search", help="full-text search (FTS5 or LIKE)")
+    mem_search.add_argument("query", metavar="QUERY", help="search text")
+    mem_search.add_argument(
+        "--config", metavar="PATH", default=None, help="configuration file to use"
+    )
+    mem_search.add_argument("--json", action="store_true", help="machine-readable output")
+    mem_search.add_argument("--content", action="store_true", help="include memory content")
+    _add_memory_filter_args(mem_search)
+
     return parser
+
+
+def _add_memory_filter_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--type", metavar="TYPE", default=None,
+        help=f"memory type in {sorted(t.value for t in MemoryType)}",
+    )
+    parser.add_argument("--source", metavar="SOURCE", default=None, help="source filter")
+    parser.add_argument(
+        "--provenance", metavar="PROVENANCE", default=None, help="provenance filter"
+    )
+    parser.add_argument("--min-confidence", metavar="VALUE", type=float, default=None,
+                        help="minimum confidence 0.0..1.0")
+    parser.add_argument("--session", metavar="ID", default=None, help="session isolation context")
+    parser.add_argument("--limit", metavar="N", type=int, default=50, help="max results")
+    parser.add_argument("--offset", metavar="N", type=int, default=0, help="skip N results")
+    parser.add_argument("--include-expired", action="store_true", help="include expired memories")
+    parser.add_argument("--include-deleted", action="store_true", help="include deleted memories")
 
 
 def _cmd_config_validate(args: argparse.Namespace) -> int:
@@ -174,6 +263,276 @@ def _cmd_ai_benchmark(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+# --- memory --------------------------------------------------------------
+
+
+def _memory_runtime(args: argparse.Namespace) -> Runtime:
+    runtime = Runtime.create(args.config)
+    asyncio.run(runtime.start())
+    return runtime
+
+
+def _memory_type_from_args(value: str | None) -> MemoryType | None:
+    if value is None:
+        return None
+    try:
+        return MemoryType(value)
+    except ValueError as exc:
+        raise MemoryValidationError(
+            f"invalid memory type: {value!r} (expected one of "
+            f"{sorted(t.value for t in MemoryType)})"
+        ) from exc
+
+
+def _memory_filter_kwargs(args: argparse.Namespace) -> dict:
+    kwargs: dict = {
+        "memory_type": _memory_type_from_args(getattr(args, "type", None)),
+        "source": getattr(args, "source", None),
+        "provenance": getattr(args, "provenance", None),
+        "session_id": getattr(args, "session", None),
+        "include_expired": getattr(args, "include_expired", False),
+        "include_deleted": getattr(args, "include_deleted", False),
+    }
+    if getattr(args, "min_confidence", None) is not None:
+        kwargs["minimum_confidence"] = args.min_confidence
+    return {k: v for k, v in kwargs.items() if v is not None}
+
+
+def _print_memories(
+    service: MemoryService,
+    items: list,
+    total: int,
+    *,
+    include_content: bool,
+    json_mode: bool,
+    header: str,
+) -> None:
+    if json_mode:
+        print(json.dumps(
+            {"items": [item.to_dict(include_content=include_content) for item in items],
+             "total": total},
+            indent=2,
+        ))
+        return
+    print(header)
+    if not items:
+        print("  (none)")
+        return
+    for item in items:
+        memory = item.memory
+        row = (
+            f"  {memory.id[:24]:<24} {memory.memory_type.value:<10} "
+            f"conf={memory.confidence:.2f} "
+            f"expires={memory.expires_at.strftime('%Y-%m-%d') if memory.expires_at else '-'} "
+            f"({item.match_reason})"
+        )
+        print(row)
+        if include_content:
+            text = memory.content if isinstance(memory.content, str) else json.dumps(memory.content)
+            print(f"    content: {text[:80]}")
+    if total > len(items):
+        print(f"  … {total - len(items)} more (total {total}; use --offset/--limit)")
+
+
+def _cmd_memory_health(args: argparse.Namespace) -> int:
+    try:
+        runtime = _memory_runtime(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        data = runtime.memory.health()
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+    else:
+        print("J.A.R.V.I.S. Memory Health")
+        print(f"  status       {data.get('status', 'unknown')}")
+        print(f"  detail       {data.get('detail') or ''}")
+        for key in (
+            "accessible", "schema_valid", "migrations_current",
+            "writable", "fts_enabled", "schema_version",
+        ):
+            if key in data:
+                print(f"  {key:<13} {data[key]}")
+        print(f"  database     {data.get('database_path', '')}")
+    return EXIT_OK if data.get("available", False) else EXIT_FAILURE
+
+
+def _cmd_memory_list(args: argparse.Namespace) -> int:
+    try:
+        runtime = _memory_runtime(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        result = runtime.memory.retrieve(
+            **{
+                **_memory_filter_kwargs(args),
+                "limit": args.limit,
+                "offset": args.offset,
+            }
+        )
+    except MemoryError as exc:
+        print(f"jarvis memory list: {exc}", file=sys.stderr)
+        return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    _print_memories(
+        runtime.memory, result.items, result.total,
+        include_content=args.content, json_mode=args.json,
+        header="J.A.R.V.I.S. Memory",
+    )
+    return EXIT_OK
+
+
+def _cmd_memory_get(args: argparse.Namespace) -> int:
+    try:
+        runtime = _memory_runtime(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        memory = runtime.memory.get(
+            args.memory_id,
+            include_expired=args.include_expired,
+            include_deleted=args.include_deleted,
+        )
+    except MemoryError as exc:
+        print(f"jarvis memory get: {exc}", file=sys.stderr)
+        return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if memory is None:
+        print(f"jarvis memory get: memory not found: {args.memory_id}", file=sys.stderr)
+        return EXIT_FAILURE
+    if args.json:
+        print(json.dumps(memory.to_dict(include_content=args.content), indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Memory")
+    print(f"  id           {memory.id}")
+    print(f"  type         {memory.memory_type.value}")
+    print(f"  source       {memory.source}")
+    print(f"  provenance   {memory.provenance}")
+    print(f"  confidence   {memory.confidence:.2f}")
+    print(f"  created_at   {memory.created_at.isoformat()}")
+    print(f"  updated_at   {memory.updated_at.isoformat()}")
+    print(f"  expires_at   {memory.expires_at.isoformat() if memory.expires_at else '-'}")
+    print(f"  session_id   {memory.session_id or '-'}")
+    if args.content:
+        text = (
+            memory.content
+            if isinstance(memory.content, str)
+            else json.dumps(memory.content)
+        )
+        print(f"  content      {text}")
+    else:
+        print("  content      (hidden; pass --content to show)")
+    return EXIT_OK
+
+
+def _cmd_memory_delete(args: argparse.Namespace) -> int:
+    try:
+        runtime = _memory_runtime(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        if args.memory_id:
+            runtime.memory.forget(args.memory_id)
+            deleted = [args.memory_id]
+        else:
+            filters = _memory_filter_kwargs(args)
+            if not any(k in filters for k in ("memory_type", "source", "provenance", "session_id")):
+                print(
+                    "jarvis memory delete: provide a memory id or at least one filter "
+                    "(--type/--source/--provenance)",
+                    file=sys.stderr,
+                )
+                return EXIT_INVALID
+            if not args.yes:
+                print(
+                    "jarvis memory delete: bulk deletion requires --yes confirmation",
+                    file=sys.stderr,
+                )
+                return EXIT_INVALID
+            result = runtime.memory.retrieve(limit=None, **filters)
+            deleted = [item.memory.id for item in result.items]
+            for memory_id in deleted:
+                runtime.memory.forget(memory_id)
+    except MemoryNotFoundError as exc:
+        print(f"jarvis memory delete: {exc}", file=sys.stderr)
+        return EXIT_FAILURE
+    except MemoryError as exc:
+        print(f"jarvis memory delete: {exc}", file=sys.stderr)
+        return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps({"deleted": deleted, "deleted_count": len(deleted)}, indent=2))
+    else:
+        print(f"Deleted {len(deleted)} memory(ies).")
+    return EXIT_OK
+
+
+def _cmd_memory_stats(args: argparse.Namespace) -> int:
+    try:
+        runtime = _memory_runtime(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        stats = runtime.memory.stats()
+    except MemoryError as exc:
+        print(f"jarvis memory stats: {exc}", file=sys.stderr)
+        return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(stats, indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Memory Stats")
+    for memory_type in MemoryType:
+        count = stats["by_type"].get(memory_type.value, 0)
+        print(f"  {memory_type.value:<12} {count}")
+    print(f"  {'expired':<12} {stats.get('expired', 0)}")
+    print(f"  {'deleted':<12} {stats.get('deleted', 0)}")
+    print(f"  {'total':<12} {stats.get('total', 0)}")
+    print(f"  fts          {'enabled' if stats.get('fts_enabled') else 'fallback (LIKE)'}")
+    print(f"  schema       v{stats.get('schema_version', 0)}")
+    print(f"  database     {stats.get('database_path', '')}")
+    return EXIT_OK
+
+
+def _cmd_memory_search(args: argparse.Namespace) -> int:
+    try:
+        runtime = _memory_runtime(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        result = runtime.memory.retrieve(
+            query=args.query,
+            **{
+                **_memory_filter_kwargs(args),
+                "limit": args.limit,
+                "offset": args.offset,
+            },
+        )
+    except MemoryError as exc:
+        print(f"jarvis memory search: {exc}", file=sys.stderr)
+        return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    _print_memories(
+        runtime.memory, result.items, result.total,
+        include_content=args.content, json_mode=args.json,
+        header=f"J.A.R.V.I.S. Memory Search: {args.query!r}",
+    )
+    return EXIT_OK
+
+
 def _runtime_from_args(args: argparse.Namespace) -> Runtime:
     runtime = Runtime.create(args.config)
     asyncio.run(runtime.start())
@@ -227,6 +586,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.ai_command == "benchmark":
             return _cmd_ai_benchmark(args)
         parser.error("ai requires a subcommand: health, providers, benchmark")
+    if args.command == "memory":
+        if args.memory_command == "health":
+            return _cmd_memory_health(args)
+        if args.memory_command == "list":
+            return _cmd_memory_list(args)
+        if args.memory_command == "get":
+            return _cmd_memory_get(args)
+        if args.memory_command == "delete":
+            return _cmd_memory_delete(args)
+        if args.memory_command == "stats":
+            return _cmd_memory_stats(args)
+        if args.memory_command == "search":
+            return _cmd_memory_search(args)
+        parser.error(
+            "memory requires a subcommand: health, list, get, delete, stats, search"
+        )
 
     parser.print_help()
     return EXIT_OK

@@ -27,6 +27,12 @@ core:
 logging:
   level: "DEBUG"
   retention_days: 7
+memory:
+  enabled: true
+  database_path: "{d}/data/memory.db"
+  auto_save_conversations: false
+  default_confidence: 0.8
+  retention_days: 365
 """,
         encoding="utf-8",
     )

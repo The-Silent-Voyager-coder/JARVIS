@@ -79,3 +79,30 @@ Audit writes are synchronous and cannot be disabled by agents.
   action.
 - Every autonomous loop carries: max iterations, timeout, resource limit,
   permission enforcement, failure handling, cancellation, audit logging.
+
+## 8. Memory Privacy Rules (implemented Phase 3)
+
+- **No secret storage.** The memory subsystem never stores credentials,
+  tokens, or API keys; inspection (`jarvis memory list|get|stats|search`)
+  never exposes them by design — memory is for curated facts, not secrets.
+- **Content never leaves the machine unencrypted by default.** The SQLite
+  database is a local file under `C:\JARVIS\data\` (config-overridable).
+- **No automatic conversation storage.** `auto_save_conversations` cannot be
+  enabled — validation refuses `true` with an explicit error. Memory writes
+  always require a deliberate save decision.
+- **Events and logs carry no content.** `MemoryCreated/Updated/Deleted/
+  Expired/Retrieved` payloads and INFO-level logs contain only
+  `memory_id`, `memory_type`, `source`, `provenance`, `session_id`. The CLI
+  prints content only with an explicit `--content` flag; JSON output redacts
+  it by default.
+- **Deletion is real and inspectable.** `forget()`/`delete` soft-delete
+  (auditable, `MemoryDeleted` event); `--include-deleted` makes deleted rows
+  visible for verification; expired memories are swept into the deleted
+  state. No unconfirmed bulk deletion: a filtered delete requires an
+  explicit `--yes`.
+- **Inspectability is a feature.** Every memory carries source, provenance,
+  confidence, and timestamps so the user can audit why a fact exists — and
+  remove it without AI services.
+- **Corrupted databases are never deleted to repair.** Degradation is
+  reported (`unavailable`, file kept as-is) so data loss is never
+  automatic.

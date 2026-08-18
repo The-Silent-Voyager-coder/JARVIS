@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from jarvis import __version__
 from jarvis.configuration.loader import load_config
 from jarvis.configuration.model import JarvisConfig
 from jarvis.core.health import HealthRegistry, HealthReport, HealthStatus
@@ -27,6 +28,7 @@ from jarvis.observability.logging import flush_logging, setup_logging
 
 if TYPE_CHECKING:
     from jarvis.intelligence.service import IntelligenceService
+    from jarvis.memory.service import MemoryService
 
 log = logging.getLogger("jarvis.core.runtime")
 
@@ -42,6 +44,7 @@ class Runtime:
         self._storage: StorageManager | None = None
         self._health: HealthRegistry | None = None
         self._intelligence: IntelligenceService | None = None
+        self._memory: MemoryService | None = None
 
     @classmethod
     def create(cls, config_path: str | None = None) -> Runtime:
@@ -89,6 +92,12 @@ class Runtime:
             raise LifecycleError("intelligence service not initialized")
         return self._intelligence
 
+    @property
+    def memory(self) -> MemoryService:
+        if self._memory is None:
+            raise LifecycleError("memory service not initialized")
+        return self._memory
+
     # --- lifecycle -----------------------------------------------------
 
     async def start(self) -> None:
@@ -127,13 +136,21 @@ class Runtime:
             service.start(self._config)
             service.register_health_check(health)
 
+            from jarvis.memory.service import MemoryService
+
+            memory_service = MemoryService()
+            self._memory = memory_service
+            memory_service.publisher = bus.publish_nowait
+            memory_service.start(self._config)
+            memory_service.register_health_check(health)
+
             registry.start_all()
 
             await bus.publish(
                 Event(
                     type=RUNTIME_STARTED,
                     source="core.runtime",
-                    payload={"version": "0.2.0", "config_source": "loaded"},
+                    payload={"version": __version__, "config_source": "loaded"},
                 )
             )
             self._lifecycle.transition(RuntimeState.RUNNING)
@@ -157,6 +174,8 @@ class Runtime:
         bus = self._bus
         if self._intelligence is not None:
             self._intelligence.shutdown()
+        if self._memory is not None:
+            self._memory.shutdown()
         if self._registry is not None:
             self._registry.stop_all()
 

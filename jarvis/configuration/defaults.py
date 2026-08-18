@@ -48,8 +48,11 @@ DEFAULTS: dict[str, object] = {
         },
     },
     "memory": {
-        "sqlite_path": "C:/JARVIS/data/memory.db",
+        "enabled": True,
+        "database_path": "C:/JARVIS/data/memory.db",
         "auto_save_conversations": False,
+        "default_confidence": 0.8,
+        "retention_days": 365,
     },
     "tasks": {
         "max_iterations": 10,

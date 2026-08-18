@@ -32,6 +32,19 @@ def test_invalid_boolean() -> None:
     assert problems[0].field == "auto_save_conversations"
 
 
+def test_auto_save_conversations_true_refused() -> None:
+    problems = validate({"memory": {"auto_save_conversations": True}})
+    assert len(problems) == 1
+    assert problems[0].field == "auto_save_conversations"
+    assert problems[0].value is True
+    assert "false" in problems[0].expected
+
+
+def test_auto_save_conversations_false_accepted() -> None:
+    problems = validate({"memory": {"auto_save_conversations": False}})
+    assert problems == []
+
+
 def test_invalid_security_mode() -> None:
     problems = validate({"security": {"default_mode": "always"}})
     assert problems[0].field == "default_mode"

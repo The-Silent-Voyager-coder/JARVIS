@@ -84,6 +84,30 @@ Target: ≥80% coverage on `jarvis/` modules; 100% on `security/` decision paths
 - Provider failure isolation is a concrete test: both adapters pointed at a
   dead endpoint produce UNAVAILABLE health and the service/CLI survive.
 
+## 6b. Phase 3 baseline (memory layer)
+
+- 230 tests total (199 → 230). New suites:
+
+| Directory | Covers |
+|---|---|
+| `tests/unit/memory/test_memory_models.py` | type/provenance/content/confidence validation invariants, id format, `to_dict` redaction, expiry checks, filter validation |
+| `tests/unit/memory/test_memory_repository.py` | schema init/health (30+ migrations, versioning, newer-schema refusal, corrupted DB kept as-is), CRUD round-trips incl. structured content, soft delete, list ordering/filters, FTS5 phrase/case/source matching, LIKE fallback, expire sweep, stats, transactional rollback (duplicate id) |
+| `tests/unit/memory/test_memory_working.py` | default TTL, no-expiry (`ttl≤0`), lazy purge, sweep, newest-first ordering, remove/clear, strict session isolation |
+| `tests/unit/memory/test_memory_service.py` | recording publisher fixture; start healthy/disabled/unavailable; remember defaults (config `default_confidence`) + validation; record_episode/add_semantic; ranking order + limit/offset totals; search incl. structured content; expired/deleted exclusion + explicit inclusion; update immutability + not-found; forget soft delete; expire events; working memory via service; stats/health; publisher failure swallowed; **events never carry content** (regression-tested) |
+
+- `tests/integration/test_cli.py` gained the full memory CLI matrix: health
+  (text/JSON/invalid config), stats, list (empty/JSON/filtered), get/delete
+  unknown id (exit 1), delete without filters (exit 2), bulk delete without
+  `--yes` (exit 2), full CRUD round-trip, filter-based bulk delete with
+  `--yes`, JSON redaction of content without `--content`.
+- `tests/unit/configuration/test_validation.py` gained the
+  `auto_save_conversations: true` refusal (privacy rule).
+- Failure isolation and corruption paths run against real temp SQLite files
+  (no mocks): corrupted file → `unavailable` + file intact; unwritable parent
+  dir; closed repository operations; transaction rollback leaves no partial
+  rows.
+- Memory tests are fully offline: no Ollama, no OpenCode, no API keys.
+
 ## 7. CI (later)
 
 Phase 1+ adds a local pre-commit hook or GitHub Actions (free tier) running

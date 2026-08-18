@@ -41,8 +41,11 @@ ai:
       timeout_seconds: 300
 
 memory:
-  sqlite_path: "C:/JARVIS/data/memory.db"
+  enabled: true
+  database_path: "C:/JARVIS/data/memory.db"
   auto_save_conversations: false
+  default_confidence: 0.8
+  retention_days: 365
 
 tasks:
   max_iterations: 10

@@ -33,7 +33,7 @@ Top-level sections:
 | `logging.*` | level, format, retention |
 | `events.*` | bus queue size, worker count |
 | `ai.*` | default provider, provider registry (local/opencode), endpoints, timeouts |
-| `memory.*` | SQLite path, auto-save policy |
+| `memory.*` | SQLite path, enable flag, auto-save policy, default confidence, retention |
 | `tasks.*` | max iterations, default timeout, persist interval |
 | `tools.*` | per-category default risk levels |
 | `security.*` | default mode (`allow`/`ask`/`deny`), auto-approve rules, audit log path |
@@ -135,3 +135,41 @@ Semantics:
 CLI: `jarvis ai health|providers|benchmark [--config PATH] [--json]`.
 `ai health` exits `1` when any provider is unhealthy (or both are
 unavailable — the CLI survives and reports), `2` on config errors.
+
+## 8. Memory Configuration (Phase 3)
+
+The `memory.*` schema drives the memory subsystem (`jarvis.memory`):
+
+```yaml
+memory:
+  enabled: true                          # false → subsystem disabled (health: healthy no-op)
+  database_path: C:/JARVIS/data/memory.db
+  auto_save_conversations: false         # ALWAYS false in Phase 3 (privacy rule)
+  default_confidence: 0.8                # 0.0..1.0 when remember() omits confidence
+  retention_days: 365                    # default expiry for working/episodic entries
+```
+
+Semantics:
+
+- `enabled` gates the whole subsystem. When `false`, `jarvis health` reports
+  the memory component as HEALTHY (a deliberate no-op, not an error), memory
+  commands fail cleanly with an "unavailable" message, and no database file
+  is created.
+- `database_path` is the SQLite file; the parent directory is created on
+  first use. Must be an absolute path.
+- `auto_save_conversations` exists in the schema but is **forbidden to
+  enable** in Phase 3: memory writes require a deliberate save decision
+  (`remember()`). Validation enforces `false`.
+- `default_confidence` is the confidence applied when a `remember()` call
+  does not specify one; values outside 0.0–1.0 are refused.
+- `retention_days` sets the default expiration for WORKING and EPISODIC
+  memories created without an explicit `expires_at`. LONG_TERM and SEMANTIC
+  memories are persistent unless an explicit expiration is given.
+
+Environment overrides use the double-underscore convention:
+`JARVIS_MEMORY__DATABASE_PATH`, `JARVIS_MEMORY__DEFAULT_CONFIDENCE`,
+`JARVIS_MEMORY__RETENTION_DAYS`.
+
+CLI: `jarvis memory health|stats|list|get|delete|search [--config PATH]
+[--json]`. `memory health` exits `1` when the subsystem is unavailable
+(e.g. corrupted database — the file is kept as-is), `2` on config errors.

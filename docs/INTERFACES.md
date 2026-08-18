@@ -1,11 +1,12 @@
 # Core Interfaces
 
-> Status: **Phase 2 implementation notes added**. Sections 1 and 8 are now
-> implemented as the provider abstraction and health contract
-> (`jarvis.intelligence`); sections 6 and 7 remain implemented
-> (`jarvis.core.registry`, `jarvis.configuration`); the remaining sections
-> stay design contracts for later phases. Notation: Python typing +
-> dataclass sketches; exact package layout may shift, semantics must not.
+> Status: **Phase 3 implementation notes added**. Section 1 is implemented as
+> the provider abstraction and health contract (`jarvis.intelligence`);
+> sections 6 and 7 remain implemented (`jarvis.core.registry`,
+> `jarvis.configuration`); the new §9 documents the implemented memory
+> interfaces (`jarvis.memory`); the remaining sections stay design contracts
+> for later phases. Notation: Python typing + dataclass sketches; exact
+> package layout may shift, semantics must not.
 
 ## 1. AIProvider Abstraction
 
@@ -284,10 +285,20 @@ jarvis health [--config PATH]            → per-component + Overall health tabl
 jarvis ai health [--config PATH] [--json]     → provider health (exit 1 if any unhealthy)
 jarvis ai providers [--config PATH] [--json]  → registered providers + capabilities
 jarvis ai benchmark [--config PATH] [--json]  → read-only hardware diagnostics
+jarvis memory health [--config PATH] [--json] → memory subsystem health (exit 1 if unavailable)
+jarvis memory stats [--config PATH] [--json]  → counts by type + subsystem state
+jarvis memory list [--config PATH] [--json] [--content] [filters] [--limit N] [--offset N]
+jarvis memory get ID [--config PATH] [--json] [--content] [--include-expired] [--include-deleted]
+jarvis memory delete ID [--config PATH] [--json]    → auditable soft delete
+jarvis memory delete [filters] --yes [--config PATH] [--json]  → bulk (needs a filter + --yes)
+jarvis memory search QUERY [--config PATH] [--json] [--content] [filters]
+# shared filters: --type, --source, --provenance, --min-confidence,
+#                 --session, --include-expired, --include-deleted
 ```
 
-Exit codes: `0` success, `1` general failure (e.g. runtime failed to start),
-`2` invalid configuration/input.
+Exit codes: `0` success, `1` general failure (e.g. runtime failed to start,
+memory not found, memory subsystem unavailable), `2` invalid
+configuration/input.
 
 ## 8. Provider Health Contract
 
@@ -314,3 +325,104 @@ never raises: unreachable providers return `ok=False` with a detail string,
 and stopped providers short-circuit before probing. The `intelligence`
 runtime health check aggregates providers — HEALTHY when at least one
 provider is healthy, UNHEALTHY when none are.
+
+## 9. Memory Interfaces (Phase 3)
+
+Implemented in `jarvis/memory/`; the service depends on the repository
+abstraction, never on SQL.
+
+```python
+class MemoryType(StrEnum):
+    WORKING = "working"          # session-scoped; RAM store, not persisted
+    LONG_TERM = "long_term"      # stable facts/preferences, survives sessions
+    EPISODIC = "episodic"        # records of J.A.R.V.I.S. actions
+    SEMANTIC = "semantic"        # storage/retrieval foundation only (no ingestion yet)
+
+@dataclass(frozen=True)
+class Memory:
+    id: str                      # "mem_<32 hex>", UUID-based, never sequential
+    memory_type: MemoryType
+    content: str | dict | list   # plain text (FTS-indexed) or JSON data
+    source: str                  # where it came from (session, file, tool, user)
+    provenance: str              # canonical kinds: user_explicit, system_event,
+                                 # tool_result, document, agent_result, import
+    confidence: float            # 0.0..1.0
+    created_at: datetime         # timezone-aware UTC
+    updated_at: datetime
+    expires_at: datetime | None
+    metadata: Mapping            # structured extras (JSON column)
+    session_id: str | None
+    deleted_at: datetime | None  # auditable soft delete
+
+@dataclass(frozen=True)
+class MemoryFilter:
+    memory_type: MemoryType | None = None
+    source: str | None = None
+    provenance: str | None = None
+    created_after: datetime | None = None
+    created_before: datetime | None = None
+    expires_before: datetime | None = None
+    minimum_confidence: float | None = None
+    session_id: str | None = None
+    include_expired: bool = False     # default: expired excluded
+    include_deleted: bool = False     # default: deleted excluded
+```
+
+```python
+class MemoryRepository(ABC):            # jarvis/memory/repository.py
+    def initialize(self) -> None: ...   # create/migrate schema
+    def create(self, memory: Memory) -> None: ...
+    def get(self, memory_id, *, include_expired=False,
+            include_deleted=False) -> Memory | None: ...
+    def update(self, memory: Memory) -> None: ...   # atomic replace
+    def delete(self, memory_id, deleted_at) -> bool: ...  # soft delete
+    def list(self, filters: MemoryFilter) -> list[Memory]: ...  # created_at DESC, id ASC
+    def search(self, query, filters: MemoryFilter) -> list[Memory]: ...
+    def expire(self, now: datetime) -> list[str]: ...  # soft-deletes expired
+    def count(self, filters: MemoryFilter) -> int: ...
+    def stats(self) -> dict: ...
+    def health(self) -> RepositoryHealth: ...
+    def close(self) -> None: ...
+```
+
+`RepositoryHealth`: `accessible`, `schema_valid`, `migrations_current`,
+`writable`, `fts_enabled`, `schema_version`, `detail`, `database_path`
+(+ `to_dict()`).
+
+```python
+class MemoryService:                     # jarvis/memory/service.py
+    availability: str                    # "healthy" | "disabled" | "unavailable"
+
+    def remember(self, content, *, memory_type=LONG_TERM, source="",
+                 provenance="user_explicit", confidence=None,
+                 expires_at=None, metadata=None, session_id=None) -> Memory: ...
+    def record_episode(self, *, content, action, source="", confidence=None,
+                       expires_at=None, session_id=None) -> Memory: ...
+    def add_semantic(self, *, content, source, provenance="document",
+                     confidence=None, metadata=None) -> Memory: ...
+    def retrieve(self, query=None, *, memory_type=None, source=None,
+                 provenance=None, created_after=None, created_before=None,
+                 expires_before=None, minimum_confidence=None,
+                 session_id=None, include_expired=False,
+                 include_deleted=False, limit=50, offset=0) -> MemoryRetrieval: ...
+    def get(self, memory_id, *, include_expired=False,
+            include_deleted=False) -> Memory: ...
+    def update(self, memory_id, *, content=_MISSING, confidence=_MISSING,
+               expires_at=_MISSING, metadata=_MISSING) -> Memory: ...
+    def forget(self, memory_id) -> None: ...       # auditable soft delete
+    def expire(self) -> int: ...                   # sweep → MemoryExpired events
+    def working(self, session_id) -> WorkingMemory: ...
+    def stats(self) -> dict: ...
+    def health(self) -> dict: ...
+```
+
+`MemoryRetrieval` = `{items: list[RankedMemory], total: int}`;
+`RankedMemory` = `{memory, score, match_reason}`. Ranking is deterministic:
+`score = 0.5·relevance + 0.3·confidence + 0.2·recency` where recency =
+`1/(1+age_days)`; a match reason (`"listed"` or `"query match: <query>"`)
+accompanies every result.
+
+`WorkingMemory` (per-session RAM): `add(content, ttl_seconds, item_id) -> id`,
+`get(item_id)`, `remove(item_id)`, `list()` (active items, newest first),
+`sweep()`, `clear()`. `WorkingMemoryStore.session(session_id)` returns the
+session's store; sessions never share items.

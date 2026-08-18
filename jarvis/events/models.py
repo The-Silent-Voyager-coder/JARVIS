@@ -31,6 +31,9 @@ OPENCODE_CONNECTED = "OpenCodeConnected"
 OPENCODE_DISCONNECTED = "OpenCodeDisconnected"
 OPENCODE_EVENT_RECEIVED = "OpenCodeEventReceived"
 MEMORY_CREATED = "MemoryCreated"
+MEMORY_UPDATED = "MemoryUpdated"
+MEMORY_DELETED = "MemoryDeleted"
+MEMORY_EXPIRED = "MemoryExpired"
 MEMORY_RETRIEVED = "MemoryRetrieved"
 PERMISSION_REQUESTED = "PermissionRequested"
 PERMISSION_GRANTED = "PermissionGranted"
@@ -70,6 +73,9 @@ DOCUMENTED_EVENT_TYPES: frozenset[str] = frozenset(
         OPENCODE_DISCONNECTED,
         OPENCODE_EVENT_RECEIVED,
         MEMORY_CREATED,
+        MEMORY_UPDATED,
+        MEMORY_DELETED,
+        MEMORY_EXPIRED,
         MEMORY_RETRIEVED,
         PERMISSION_REQUESTED,
         PERMISSION_GRANTED,
