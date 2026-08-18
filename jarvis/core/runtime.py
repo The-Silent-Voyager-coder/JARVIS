@@ -29,6 +29,7 @@ from jarvis.observability.logging import flush_logging, setup_logging
 if TYPE_CHECKING:
     from jarvis.intelligence.service import IntelligenceService
     from jarvis.memory.service import MemoryService
+    from jarvis.tools.service import ToolService
 
 log = logging.getLogger("jarvis.core.runtime")
 
@@ -45,6 +46,7 @@ class Runtime:
         self._health: HealthRegistry | None = None
         self._intelligence: IntelligenceService | None = None
         self._memory: MemoryService | None = None
+        self._tools: ToolService | None = None
 
     @classmethod
     def create(cls, config_path: str | None = None) -> Runtime:
@@ -98,6 +100,12 @@ class Runtime:
             raise LifecycleError("memory service not initialized")
         return self._memory
 
+    @property
+    def tools(self) -> ToolService:
+        if self._tools is None:
+            raise LifecycleError("tool service not initialized")
+        return self._tools
+
     # --- lifecycle -----------------------------------------------------
 
     async def start(self) -> None:
@@ -144,6 +152,14 @@ class Runtime:
             memory_service.start(self._config)
             memory_service.register_health_check(health)
 
+            from jarvis.tools.service import ToolService
+
+            tool_service = ToolService()
+            self._tools = tool_service
+            tool_service.publisher = bus.publish_nowait
+            tool_service.start(self._config)
+            tool_service.register_health_check(health)
+
             registry.start_all()
 
             await bus.publish(
@@ -176,6 +192,8 @@ class Runtime:
             self._intelligence.shutdown()
         if self._memory is not None:
             self._memory.shutdown()
+        if self._tools is not None:
+            self._tools.shutdown()
         if self._registry is not None:
             self._registry.stop_all()
 

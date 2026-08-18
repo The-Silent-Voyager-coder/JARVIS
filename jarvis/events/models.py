@@ -19,6 +19,11 @@ SPEECH_TRANSCRIBED = "SpeechTranscribed"
 AI_RESPONSE_STARTED = "AIResponseStarted"
 AI_RESPONSE_COMPLETED = "AIResponseCompleted"
 TOOL_REQUESTED = "ToolRequested"
+TOOL_ALLOWED = "ToolAllowed"
+TOOL_DENIED = "ToolDenied"
+TOOL_APPROVAL_REQUESTED = "ToolApprovalRequested"
+TOOL_APPROVED = "ToolApproved"
+TOOL_REJECTED = "ToolRejected"
 TOOL_STARTED = "ToolStarted"
 TOOL_COMPLETED = "ToolCompleted"
 TOOL_FAILED = "ToolFailed"
@@ -61,6 +66,11 @@ DOCUMENTED_EVENT_TYPES: frozenset[str] = frozenset(
         AI_RESPONSE_STARTED,
         AI_RESPONSE_COMPLETED,
         TOOL_REQUESTED,
+        TOOL_ALLOWED,
+        TOOL_DENIED,
+        TOOL_APPROVAL_REQUESTED,
+        TOOL_APPROVED,
+        TOOL_REJECTED,
         TOOL_STARTED,
         TOOL_COMPLETED,
         TOOL_FAILED,

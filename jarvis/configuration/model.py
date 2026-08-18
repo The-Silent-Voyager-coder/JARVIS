@@ -17,6 +17,14 @@ class SecurityMode(StrEnum):
     DENY = "deny"
 
 
+class ToolSecurityMode(StrEnum):
+    """Tool-system security modes (docs/SECURITY_MODEL.md §tools)."""
+
+    LOCKDOWN = "lockdown"
+    NORMAL = "normal"
+    DEVELOPMENT = "development"
+
+
 class RiskLevel(StrEnum):
     READ = "READ"
     LOW_WRITE = "LOW_WRITE"
@@ -115,6 +123,13 @@ class ToolDefaultsConfig:
 
 @dataclass(frozen=True)
 class ToolsConfig:
+    """Tool-system settings (Phase 4 secure tool layer)."""
+
+    working_directory: Path
+    execution_timeout_seconds: float
+    max_output_bytes: int
+    allowed_roots: tuple[Path, ...]
+    denied_roots: tuple[Path, ...]
     terminal: ToolDefaultsConfig
     browser: ToolDefaultsConfig
 
@@ -122,6 +137,7 @@ class ToolsConfig:
 @dataclass(frozen=True)
 class SecurityConfig:
     default_mode: SecurityMode
+    mode: ToolSecurityMode
     allow_auto_approve_read: bool
     destructive_confirm: bool
     audit_log: Path

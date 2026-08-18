@@ -7,6 +7,7 @@ expectation. Nothing is silently ignored.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -28,6 +29,7 @@ from jarvis.configuration.model import (
     TasksConfig,
     ToolDefaultsConfig,
     ToolsConfig,
+    ToolSecurityMode,
     TtsConfig,
     VoiceConfig,
     WakeWordConfig,
@@ -37,8 +39,8 @@ LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 PROVIDER_NAMES = frozenset({"local", "opencode"})
 
 Kind = Literal[
-    "str", "nonempty_str", "path", "positive_int", "nonneg_int", "positive_number",
-    "bool", "enum", "url", "mapping", "confidence",
+    "str", "nonempty_str", "path", "path_list", "positive_int", "nonneg_int",
+    "positive_number", "bool", "enum", "url", "mapping", "confidence",
 ]
 
 
@@ -47,6 +49,7 @@ def _describe(kind: Kind) -> str:
         "str": "string",
         "nonempty_str": "non-empty string",
         "path": "absolute filesystem path",
+        "path_list": "list of absolute filesystem paths",
         "positive_int": "integer greater than zero",
         "nonneg_int": "integer greater than or equal to zero",
         "positive_number": "number greater than zero",
@@ -127,10 +130,20 @@ SCHEMA: dict[str, dict[str, Field]] = {
         "persist_interval_seconds": Field("positive_int", _describe("positive_int")),
     },
     "tools": {
+        "working_directory": Field("path", _describe("path")),
+        "execution_timeout_seconds": Field("positive_number", _describe("positive_number")),
+        "max_output_bytes": Field("positive_int", _describe("positive_int")),
+        "allowed_roots": Field("path_list", _describe("path_list")),
+        "denied_roots": Field("path_list", _describe("path_list")),
         "terminal": Field("mapping", "tool defaults mapping"),
         "browser": Field("mapping", "tool defaults mapping"),
     },
     "security": {
+        "mode": Field(
+            "enum",
+            "mode in ['lockdown', 'normal', 'development']",
+            frozenset(m.value for m in ToolSecurityMode),
+        ),
         "default_mode": Field(
             "enum", "mode in ['allow', 'ask', 'deny']", frozenset({"allow", "ask", "deny"})
         ),
@@ -253,6 +266,8 @@ def validate(raw: dict[str, Any]) -> list[ConfigProblem]:
                     _check_scalar(section, name, field, value, errors)
             elif field.kind == "mapping" and not isinstance(value, dict):
                 errors.append(_problem_for_field(field, value, section, name))
+            elif field.kind == "path_list" and not _matches_path_list(value):
+                errors.append(_problem_for_field(field, value, section, name))
 
     memory = raw.get("memory")
     if isinstance(memory, dict) and memory.get("auto_save_conversations") is True:
@@ -361,6 +376,8 @@ def _matches(kind: Kind, value: Any) -> bool:
         return isinstance(value, str) and bool(value.strip())
     if kind == "path":
         return isinstance(value, str) and bool(value.strip()) and Path(value).is_absolute()
+    if kind == "path_list":
+        return _matches_path_list(value)
     if kind == "url":
         if not isinstance(value, str):
             return False
@@ -374,6 +391,12 @@ def _matches(kind: Kind, value: Any) -> bool:
         except ValueError:
             return False
     return False
+
+
+def _matches_path_list(value: Any) -> bool:
+    if not isinstance(value, list):
+        return False
+    return all(isinstance(item, str) and _matches("path", item) for item in value)
 
 
 def coerce_env(kind: Kind, raw: str) -> Any:
@@ -403,6 +426,11 @@ def coerce_env(kind: Kind, raw: str) -> Any:
         if not 0.0 <= value <= 1.0:
             raise ValueError(f"expected number between 0.0 and 1.0, got {raw!r}")
         return value
+    if kind == "path_list":
+        items = raw.split(os.pathsep)
+        if not all(bool(item.strip()) for item in items):
+            raise ValueError(f"expected path list separated by {os.pathsep!r}, got {raw!r}")
+        return items
     return raw
 
 
@@ -520,12 +548,22 @@ def build_config(raw: dict[str, Any]) -> JarvisConfig:
     )
 
     tools = ToolsConfig(
-        terminal=ToolDefaultsConfig(default_risk=RiskLevel(str(raw["tools"]["terminal"]["default_risk"]))),
-        browser=ToolDefaultsConfig(default_risk=RiskLevel(str(raw["tools"]["browser"]["default_risk"]))),
+        working_directory=p("tools", "working_directory"),
+        execution_timeout_seconds=float(raw["tools"]["execution_timeout_seconds"]),
+        max_output_bytes=int(raw["tools"]["max_output_bytes"]),
+        allowed_roots=tuple(Path(str(item)) for item in raw["tools"]["allowed_roots"]),
+        denied_roots=tuple(Path(str(item)) for item in raw["tools"]["denied_roots"]),
+        terminal=ToolDefaultsConfig(
+            default_risk=RiskLevel(str(raw["tools"]["terminal"]["default_risk"]))
+        ),
+        browser=ToolDefaultsConfig(
+            default_risk=RiskLevel(str(raw["tools"]["browser"]["default_risk"]))
+        ),
     )
 
     security = SecurityConfig(
         default_mode=SecurityMode(str(raw["security"]["default_mode"])),
+        mode=ToolSecurityMode(str(raw["security"]["mode"])),
         allow_auto_approve_read=bool(raw["security"]["allow_auto_approve_read"]),
         destructive_confirm=bool(raw["security"]["destructive_confirm"]),
         audit_log=p("security", "audit_log"),

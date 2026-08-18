@@ -60,10 +60,16 @@ DEFAULTS: dict[str, object] = {
         "persist_interval_seconds": 5,
     },
     "tools": {
+        "working_directory": "C:/JARVIS/workspaces",
+        "execution_timeout_seconds": 30.0,
+        "max_output_bytes": 65536,
+        "allowed_roots": ["C:/JARVIS/workspaces"],
+        "denied_roots": [],
         "terminal": {"default_risk": "LOW_WRITE"},
         "browser": {"default_risk": "READ"},
     },
     "security": {
+        "mode": "normal",
         "default_mode": "ask",
         "allow_auto_approve_read": True,
         "destructive_confirm": True,

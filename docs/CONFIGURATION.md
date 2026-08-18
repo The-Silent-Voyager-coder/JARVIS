@@ -35,8 +35,8 @@ Top-level sections:
 | `ai.*` | default provider, provider registry (local/opencode), endpoints, timeouts |
 | `memory.*` | SQLite path, enable flag, auto-save policy, default confidence, retention |
 | `tasks.*` | max iterations, default timeout, persist interval |
-| `tools.*` | per-category default risk levels |
-| `security.*` | default mode (`allow`/`ask`/`deny`), auto-approve rules, audit log path |
+| `tools.*` | working directory, execution timeout, output cap, allowed/denied roots, per-category default risk |
+| `security.*` | mode (`normal`/`lockdown`/`development`), auto-approve rules, audit log path |
 | `voice.*` | wake word / STT / TTS engine + model selections |
 
 Unknown keys or invalid values → validation errors at startup.
@@ -173,3 +173,46 @@ Environment overrides use the double-underscore convention:
 CLI: `jarvis memory health|stats|list|get|delete|search [--config PATH]
 [--json]`. `memory health` exits `1` when the subsystem is unavailable
 (e.g. corrupted database — the file is kept as-is), `2` on config errors.
+
+## 9. Tool Security Configuration (Phase 4)
+
+The `security.*` + `tools.*` schema drives the tool system (`jarvis.tools`):
+
+```yaml
+security:
+  mode: normal                        # normal | lockdown | development
+  allow_auto_approve_read: true       # development mode: `low` risk allowed
+tools:
+  working_directory: C:/JARVIS/workspaces   # explicit cwd for every tool
+  execution_timeout_seconds: 30.0           # per-run subprocess timeout
+  max_output_bytes: 65536                   # output truncation bound
+  allowed_roots: [C:/JARVIS/workspaces]     # path policy applies here
+  denied_roots: []                          # explicit denials win
+  terminal:
+    default_risk: LOW_WRITE                 # base risk for shell.execute
+  browser:
+    default_risk: READ                      # reserved category
+```
+
+Semantics:
+
+- `security.mode` selects the policy matrix: `normal` (safe → allow; low →
+  allow when `allow_auto_approve_read` is true — the default — else ask;
+  medium/high → ask; critical → deny everywhere), `lockdown` (only `safe`
+  tools), `development` (as `normal`, plus `medium` tools allowed).
+- `tools.working_directory` is the explicit working directory for every
+  tool; `execution_timeout_seconds` bounds every subprocess; output above
+  `max_output_bytes` is replaced by a truncation marker.
+- `allowed_roots`/`denied_roots` feed the path security hook: reads/writes
+  outside the roots are denied; denied roots are denied even when listed as
+  allowed. Protected files (`memory.db`, `.env`, secret-stemmed names) are
+  always denied.
+- `tools.<category>.default_risk` sets the base risk for a category's tools
+  (the shell classifier can only raise it).
+
+Environment overrides use the double-underscore convention:
+`JARVIS_SECURITY__MODE`, `JARVIS_TOOLS__ALLOWED_ROOTS`,
+`JARVIS_TOOLS__EXECUTION_TIMEOUT_SECONDS`.
+
+CLI: `jarvis tools list|info|health|execute [--config PATH] [--json]
+[--approve]`. See `docs/TOOLS.md` for the full tool-system contract.

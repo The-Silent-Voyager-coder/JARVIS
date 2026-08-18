@@ -50,6 +50,56 @@ def test_invalid_security_mode() -> None:
     assert problems[0].field == "default_mode"
 
 
+def test_invalid_tool_security_mode() -> None:
+    problems = validate({"security": {"mode": "chaotic"}})
+    assert problems[0].field == "mode"
+    assert "lockdown" in problems[0].expected
+
+
+def test_valid_tool_security_modes() -> None:
+    for mode in ("lockdown", "normal", "development"):
+        assert validate({"security": {"mode": mode}}) == []
+
+
+def test_invalid_working_directory() -> None:
+    problems = validate({"tools": {"working_directory": "relative"}})
+    assert problems[0].field == "working_directory"
+
+
+def test_invalid_execution_timeout() -> None:
+    problems = validate({"tools": {"execution_timeout_seconds": 0}})
+    assert problems[0].field == "execution_timeout_seconds"
+
+
+def test_invalid_max_output_bytes() -> None:
+    problems = validate({"tools": {"max_output_bytes": -1}})
+    assert problems[0].field == "max_output_bytes"
+
+
+def test_allowed_roots_rejects_non_list() -> None:
+    problems = validate({"tools": {"allowed_roots": "C:/JARVIS"}})
+    assert problems[0].field == "allowed_roots"
+
+
+def test_allowed_roots_rejects_relative_item() -> None:
+    problems = validate({"tools": {"allowed_roots": ["C:/JARVIS", "relative/path"]}})
+    assert problems[0].field == "allowed_roots"
+
+
+def test_allowed_roots_accepts_absolute_list() -> None:
+    assert validate({"tools": {"allowed_roots": ["C:/JARVIS", "D:/work"]}}) == []
+
+
+def test_denied_roots_accepts_empty_list() -> None:
+    assert validate({"tools": {"denied_roots": []}}) == []
+
+
+def test_coerce_env_path_list() -> None:
+    assert coerce_env("path_list", "C:/a;C:/b") == ["C:/a", "C:/b"]
+    with pytest.raises(ValueError):
+        coerce_env("path_list", ";;")
+
+
 def test_invalid_risk_level() -> None:
     problems = validate({"tools": {"terminal": {"default_risk": "ALWAYS"}}})
     assert problems[0].field == "terminal.default_risk"

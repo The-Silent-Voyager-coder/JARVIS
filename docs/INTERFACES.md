@@ -1,12 +1,13 @@
 # Core Interfaces
 
-> Status: **Phase 3 implementation notes added**. Section 1 is implemented as
+> Status: **Phase 4 implementation notes added**. Section 1 is implemented as
 > the provider abstraction and health contract (`jarvis.intelligence`);
 > sections 6 and 7 remain implemented (`jarvis.core.registry`,
-> `jarvis.configuration`); the new §9 documents the implemented memory
-> interfaces (`jarvis.memory`); the remaining sections stay design contracts
-> for later phases. Notation: Python typing + dataclass sketches; exact
-> package layout may shift, semantics must not.
+> `jarvis.configuration`); §9 documents the implemented memory interfaces
+> (`jarvis.memory`); §10 documents the implemented tool system
+> (`jarvis.tools`); the remaining sections stay design contracts for later
+> phases. Notation: Python typing + dataclass sketches; exact package layout
+> may shift, semantics must not.
 
 ## 1. AIProvider Abstraction
 
@@ -294,6 +295,11 @@ jarvis memory delete [filters] --yes [--config PATH] [--json]  → bulk (needs a
 jarvis memory search QUERY [--config PATH] [--json] [--content] [filters]
 # shared filters: --type, --source, --provenance, --min-confidence,
 #                 --session, --include-expired, --include-deleted
+jarvis tools list [--config PATH] [--json]                 → registered tools
+jarvis tools info ID [--config PATH] [--json]              → one declaration
+jarvis tools health [--config PATH] [--json]               → service + mode
+jarvis tools execute ID [key=value ...] [--approve] [--json]
+                        [--session-id SID] [--config PATH] → full pipeline
 ```
 
 Exit codes: `0` success, `1` general failure (e.g. runtime failed to start,
@@ -426,3 +432,90 @@ accompanies every result.
 `get(item_id)`, `remove(item_id)`, `list()` (active items, newest first),
 `sweep()`, `clear()`. `WorkingMemoryStore.session(session_id)` returns the
 session's store; sessions never share items.
+
+## 10. Tool System Interfaces (Phase 4)
+
+Implemented in `jarvis/tools/`; every execution — AI or CLI — goes through
+`ToolService.execute` (no bypass). Full contract: `docs/TOOLS.md`.
+
+```python
+class ToolRisk(StrEnum):     # safe | low | medium | high | critical
+class ToolCategory(StrEnum): # filesystem | process | system | shell
+                             # network | browser | gui (reserved)
+class ToolDecision(StrEnum): # allow | ask | deny  (never booleans)
+class ApprovalOutcome(StrEnum):  # approved | denied | timeout | cancelled
+
+@dataclass(frozen=True)
+class ToolRequest:
+    request_id: str
+    tool_id: str
+    arguments: dict = {}
+    source: str = "ai"              # "ai" | "cli"
+    session_id: str | None = None
+    task_id: str | None = None
+
+@dataclass(frozen=True)
+class ToolContext:              # built by the service from config
+    working_directory: Path
+    environment: dict[str, str] # scrubbed — no JARVIS secrets
+    timeout_seconds: float
+    max_output_bytes: int
+
+@dataclass(frozen=True)
+class ToolResult:
+    request_id: str
+    tool_id: str
+    success: bool
+    output: Any = None
+    error: str | None = None
+    metadata: dict = {}
+    duration_ms: float = 0.0
+
+class BaseTool:
+    id: str                       # e.g. "filesystem.read"
+    name: str
+    description: str
+    version: str
+    risk_level: ToolRisk
+    category: ToolCategory
+    capabilities: tuple[str, ...]
+    input_schema: dict            # JSON-schema subset (object/string/…)
+    output_schema: dict
+    PATH_ARGUMENTS: tuple[str, ...] = ()   # path-checked argument names
+    def execute(self, args: dict, context: ToolContext) -> ToolResult: ...
+```
+
+```python
+class ToolRegistry:                     # jarvis/tools/registry.py
+    def register(self, tool: BaseTool) -> None: ...   # dup/id/schema rejected
+    def get(self, tool_id: str) -> BaseTool: ...      # ToolNotFoundError
+    def list_ids(self) -> tuple[str, ...]: ...
+    def describe(self, tool_id: str) -> dict: ...     # full declaration
+    def health(self) -> dict: ...                     # status/tool_count/tools
+
+class SecurityPolicy:                   # jarvis/tools/policy.py
+    @classmethod
+    def from_config(cls, config: JarvisConfig) -> SecurityPolicy: ...
+    def evaluate(self, request, tool) -> tuple[ToolDecision, str]: ...
+
+class ToolService:                      # jarvis/tools/service.py
+    availability: str                   # "healthy" | "disabled" | "unavailable"
+    approval: ApprovalProvider | None   # public; install to answer ASK
+    publisher: Any                      # callable(Event); wired by the runtime
+    def start(self, config: JarvisConfig | None = None) -> None: ...
+    def execute(self, request: ToolRequest) -> ToolResult: ...
+    def registry(self) -> ToolRegistry: ...
+    def health(self) -> dict: ...
+    def register_health_check(self, health_registry: HealthRegistry) -> None: ...
+
+class ApprovalProvider(ABC):            # jarvis/tools/approval.py
+    def request_approval(self, request: ToolRequest, tool: BaseTool,
+                         reason: str) -> ApprovalOutcome: ...
+```
+
+Pipeline semantics: policy decisions are `ALLOW`/`ASK`/`DENY`; `ASK` without
+a provider is DENY (fail-closed); `critical` is DENY in every mode; hooks
+(path roots + protected files, shell classifier, sensitive arguments) only
+tighten. Results are capped at `tools.max_output_bytes` with a truncation
+marker, and every attempt is published as a `TOOL_*` event carrying
+`request_id`/`tool_id`/`risk_level`/`session_id`/`task_id`.

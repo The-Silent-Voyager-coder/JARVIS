@@ -124,6 +124,7 @@ def test_health_components_registered(valid_config_yaml: Path) -> None:
             "service_registry": "HEALTHY",
             "storage": "HEALTHY",
             "memory": "HEALTHY",
+            "tools": "HEALTHY",
             "intelligence": reports["intelligence"],  # env-dependent provider state
         }
         assert reports["intelligence"] in ("HEALTHY", "DEGRADED", "UNHEALTHY")

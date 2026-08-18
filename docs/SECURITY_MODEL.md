@@ -106,3 +106,44 @@ Audit writes are synchronous and cannot be disabled by agents.
 - **Corrupted databases are never deleted to repair.** Degradation is
   reported (`unavailable`, file kept as-is) so data loss is never
   automatic.
+
+## 9. Tool System Security (implemented Phase 4)
+
+The Phase 4 tool layer (`jarvis/tools/`) turns the design above into the
+enforcement layer every tool execution passes through. Full contract:
+`docs/TOOLS.md`.
+
+- **One pipeline, no bypass.** AI and CLI executions share
+  `ToolService.execute`: registry → policy → decision → approval → execution
+  → audit events. `critical` risk is denied in every mode; an `ASK` with no
+  approval provider is denied (fail-closed).
+- **Risk model.** Tool risks are `safe`/`low`/`medium`/`high`/`critical`
+  (the §2 vocabulary maps: READ ≈ safe/low, LOW_WRITE ≈ medium,
+  HIGH_WRITE ≈ high, SYSTEM/FORBIDDEN ≈ critical). Category default risks in
+  config keep the §2 names (`LOW_WRITE`, `READ`, …) as base risks.
+- **Modes.** `security.mode`: `normal` (default), `lockdown` (only `safe`),
+  `development` (also auto-approves `medium`). `low` is auto-approved when
+  `security.allow_auto_approve_read` is true (the default).
+- **Scope is part of the decision.** Path arguments are canonicalized
+  against the explicit working directory and checked against
+  `allowed_roots`/`denied_roots` before any execution; paths outside the
+  roots are denied, not escalated. Protected files (`memory.db`, `.env`,
+  secret-stemmed names) are always denied.
+- **No silent escalation.** The shell classifier can only raise a command's
+  risk (`safe`/`restricted`/`dangerous`/`forbidden`); `forbidden` and
+  `dangerous` commands are denied outright in every mode.
+- **No `SYSTEM` privilege ever requested.** No tool requests elevation; the
+  app runs non-elevated.
+- **Secrets never reach tools.** Environments are scrubbed of `JARVIS_*`
+  secret-shaped variables before tools see them; tools cannot inject
+  secret-shaped arguments; `system.info` output is redacted before it can
+  leak environment values.
+- **Every attempt is audited.** `ToolRequested` … `ToolDenied` events carry
+  `request_id`/`tool_id`/`risk_level`/`session_id`/`task_id` and reasons;
+  complete sensitive argument values are never published.
+- **Bounded execution.** No `shell=True`; every subprocess has a timeout and
+  bounded output; a crashing tool becomes a failed result, never a crashed
+  process.
+- **Phase 4 intentional absences.** No delete tool, no process-kill tool,
+  and no `network`/`browser`/`gui` tools. §6 (permission manager with policy
+  files, sandboxing, audit file) remains Phase 9 hardening scope.

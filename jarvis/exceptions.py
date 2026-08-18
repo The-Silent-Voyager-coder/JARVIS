@@ -63,3 +63,27 @@ class MemoryDatabaseError(MemoryError):
 
 class MemoryUnavailableError(MemoryError):
     """The memory subsystem failed to start and cannot serve requests."""
+
+
+class ToolError(JarvisError):
+    """The tool subsystem failed (registry, policy, or execution)."""
+
+
+class ToolNotFoundError(ToolError):
+    """The requested tool id is not registered."""
+
+
+class ToolValidationError(ToolError):
+    """A tool request did not pass schema validation."""
+
+
+class ToolPermissionDeniedError(ToolError):
+    """The security policy denied the tool request."""
+
+
+class ToolExecutionError(ToolError):
+    """The tool executed but failed (runtime, OS, or timeout errors)."""
+
+
+class ToolUnavailableError(ToolError):
+    """The tool subsystem failed to start and cannot serve requests."""

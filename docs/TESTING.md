@@ -86,7 +86,7 @@ Target: ≥80% coverage on `jarvis/` modules; 100% on `security/` decision paths
 
 ## 6b. Phase 3 baseline (memory layer)
 
-- 230 tests total (199 → 230). New suites:
+- 314 tests total (199 → 314). New suites:
 
 | Directory | Covers |
 |---|---|
@@ -107,6 +107,40 @@ Target: ≥80% coverage on `jarvis/` modules; 100% on `security/` decision paths
   dir; closed repository operations; transaction rollback leaves no partial
   rows.
 - Memory tests are fully offline: no Ollama, no OpenCode, no API keys.
+
+## 6c. Phase 4 baseline (tool system)
+
+- **531 tests total (314 → 531)** — 217 new tests, all offline. New suites under
+  `tests/unit/tools/` (+ shared `stub_tools.py`) and `tests/integration/`
+  `test_cli_tools.py`:
+
+| File | Covers |
+|---|---|
+| `test_tool_models.py` | schema/argument validation (object/string/integer/number/boolean/array, required, bounds, array items), enum coverage — decisions never boolean, 5 risks, approval outcomes, reserved categories |
+| `test_tool_registry.py` | register/get/duplicate-rejected/non-Tool-rejected/invalid-schema/unregister/describe/health |
+| `test_shell_classifier.py` | parametrized SAFE/RESTRICTED/DANGEROUS/FORBIDDEN command tables, empty command, git destructive, case/`.exe` insensitivity |
+| `test_pathsecurity.py` | canonicalize (absolute/relative/`~`), is_within incl. prefix-sibling negatives, protected files, secret stems, directories never protected |
+| `test_environment.py` | scrub allowlist, marker tokens incl. plurals, merge rejections (non-string values, secret keys) |
+| `test_policy.py` | mode matrix (LOCKDOWN/NORMAL/DEVELOPMENT/CRITICAL-in-all-modes), `allow_auto_approve_read`, the three hooks, hooks-only-tighten, disjoint classifier tables, denial reasons |
+| `test_filesystem_tools.py` | list/stat/read (binary refusal, truncation)/mkdir/write (atomic, overwrite, non-atomic, oversize, missing parent), risk pins, **no delete tool**, list-entry cap |
+| `test_process_tools.py` | list contains current pid, info current/unknown/negative, **no terminate tool**, `tasklist` smoke test |
+| `test_shell_tools.py` | success/exit-code failure/timeout/truncation/env additions/secret-env rejection/non-string env/cwd enforce + missing cwd/unstartable binary/duration/output fields |
+| `test_system_tools.py` | `system.info` shape + environment-secret redaction through serialization |
+| `test_tool_service.py` | full pipeline event sequences (allowed/asked/denied/rejected/approved), approval override, denial reasons, output truncation, health, publisher-never-raises, no sensitive args in events, medium/low/allow_low matrix, no delete/kill in registry |
+| `test_cli_tools.py` (integration) | `tools list|info|health|execute` incl. `--json`, invalid args (exit 2), unknown tool (exit 2), medium write without/with `--approve`, shell without/with `--approve`, dangerous command denied, path outside roots denied, session-id propagation |
+
+- Key behaviors proven end-to-end through the real CLI: **approval is the
+  only way through `ASK`** (medium write / shell without `--approve` →
+  "no approval provider configured", exit 1), **policy denials hold even
+  with `--approve`** (dangerous command, path outside allowed roots),
+  `system.info` executes without approval (safe).
+- Implementation defects caught by the suite: plural secret markers
+  (`credentials`) missed by `is_secret_name`; a Windows `ctypes`
+  `GetDiskFreeSpaceW` call crashing the interpreter inside `system.info`
+  (replaced with stdlib `shutil.disk_usage`, crash-proof); policy tests
+  initially used paths inside allowed roots (now genuinely outside).
+- No `shell=True`, no network, no real services: subprocess tests run
+  `sys.executable --version`; `tasklist` only in one guarded smoke test.
 
 ## 7. CI (later)
 

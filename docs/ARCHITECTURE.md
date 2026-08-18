@@ -1,9 +1,10 @@
 # Architecture
 
-> Status: **Phase 3 — memory foundation implemented**. This is the
+> Status: **Phase 4 — secure tool system implemented**. This is the
 > contract that all modules must honor. It may be refined by the architect,
 > but not silently violated by implementation. Phase 2 added full detail for
-> the intelligence section; Phase 3 adds the memory section (§5.2).
+> the intelligence section; Phase 3 adds the memory section (§5.2); Phase 4
+> adds the tool section (§5.3).
 
 ## 1. Mission
 
@@ -81,7 +82,7 @@ verifies results before claiming success.
 | `interface/` | CLI, terminal/simple web/voice entry points | 1 |
 | `intelligence/` | `AIProvider` abstraction, local provider, model router, structured output, streaming | 2 |
 | `memory/` | Memory models, SQLite storage, provenance, retrieval | 3 |
-| `tools/` | Typed tool registry (files, terminal, apps, screenshot, clipboard, git, browser) | 4 |
+| `tools/` | Typed tool registry + security pipeline (files, processes, shell, system); policy, path security, shell classifier, approvals | 4 |
 | `integration/` | OpenCode client: health, sessions, events, delegation, results | 5 |
 | `voice/` | Wake word, STT, TTS, voice session management | 6 |
 | `planning/` | Planner, task graph, execution loop, retries, verification, persistence | 7 |
@@ -139,13 +140,13 @@ CREATED → INITIALIZING → RUNNING → STOPPING → STOPPED
 - `Runtime.stop()` is idempotent and safe before start: stop services in
   reverse dependency order → publish `RuntimeStopping` and `RuntimeStopped` →
   close the bus → flush logs → `STOPPED`.
-- Health (`jarvis/core/health.py`): seven checks — `core` (lifecycle state),
+- Health (`jarvis/core/health.py`): eight checks — `core` (lifecycle state),
   `configuration` (loaded + validated), `event_bus` (open and accepting),
   `service_registry` (registered + started), `storage` (data root writable),
-  `intelligence` (at least one provider healthy — added in Phase 2), and
-  `memory` (memory subsystem HEALTHY — added in Phase 3). Overall status =
-  HEALTHY only when every check is HEALTHY, DEGRADED when at least one is
-  DEGRADED, otherwise UNHEALTHY.
+  `intelligence` (at least one provider healthy — added in Phase 2), `memory`
+  (memory subsystem HEALTHY — added in Phase 3), and `tools` (tool subsystem
+  HEALTHY — added in Phase 4). Overall status = HEALTHY only when every check
+  is HEALTHY, DEGRADED when at least one is DEGRADED, otherwise UNHEALTHY.
 
 ## 5.1 Intelligence Layer (Phase 2)
 
@@ -347,6 +348,57 @@ Memory events (`MemoryCreated/Updated/Deleted/Expired/Retrieved`) carry only
 `memory_id`, `memory_type`, `source`, `provenance`, `session_id` — never
 content (privacy rule, `docs/SECURITY_MODEL.md` §8).
 
+## 5.3 Tool Layer (Phase 4)
+
+The tool layer (`jarvis/tools/`) implements the Phase 0 permission-aware tool
+contract as an executable security pipeline. Full contract: `docs/TOOLS.md`.
+
+### Package layout
+
+```text
+jarvis/tools/
+├── models.py            BaseTool, ToolRequest, ToolContext, ToolResult,
+│                        ToolRisk (safe..critical), ToolCategory, ToolDecision,
+│                        ApprovalOutcome, validate_arguments (schema subset)
+├── registry.py          ToolRegistry: register/get/list_ids/describe/health;
+│                        duplicates and invalid schemas rejected
+├── policy.py            SecurityPolicy + mode matrix (normal/lockdown/
+│                        development) + hooks (path, shell, sensitive)
+├── pathsecurity.py      canonicalize, is_within, protected-file detection
+├── shell_classifier.py  safe/restricted/dangerous/forbidden command tables
+├── environment.py       scrub_environment / merge_environment (no secrets leak)
+├── approval.py          ApprovalProvider ABC (approved/denied/timeout/cancelled)
+├── filesystem_tools.py  list/stat/read/mkdir/write (no delete tool)
+├── process_tools.py     list/info (no terminate tool)
+├── system_tools.py      system.info (OS/CPU/RAM/storage/GPU, redacted)
+├── shell_tools.py       shell.execute (explicit argv, never shell=True)
+├── service.py           ToolService facade: the single security pipeline
+├── defaults.py          DEFAULT_TOOL_CLASSES + register_default_tools()
+└── __init__.py          package surface
+```
+
+### Pipeline
+
+`AI → ToolRequest → ToolRegistry → SecurityPolicy → ALLOW|ASK|DENY → Approval
+→ Execution → ToolResult → audit events`. There is no bypass: the CLI
+`tools execute` command drives the exact same `ToolService.execute`.
+
+### Key properties
+
+- Decisions are `ALLOW`/`ASK`/`DENY`, never booleans; `critical` risk is
+  denied in every mode; `lockdown` allows only `safe`; an `ASK` with no
+  approval provider is denied (fail-closed).
+- Policy hooks only tighten: path checks (allowed/denied roots, protected
+  files), shell classifier, sensitive-argument detection.
+- Execution bounds: no `shell=True`, per-run timeout, bounded output with
+  truncation markers, scrubbed environment, explicit working directory.
+- Audit events (`TOOL_*`) carry `request_id`/`tool_id`/`risk_level`/
+  `session_id`/`task_id`, never sensitive argument values.
+- No `filesystem.delete` and no `process.terminate` exist in Phase 4;
+  `network`/`browser`/`gui` categories are reserved.
+- Failure isolation: a broken tool configuration leaves the service
+  `unavailable` with a detail string; the runtime and CLI keep working.
+
 ## 6. Event System
 
 All module-to-module coupling that is not a direct service call goes through
@@ -379,6 +431,16 @@ payloads carry ids/types/sources only, never content):
 
 ```text
 MemoryCreated   MemoryUpdated   MemoryDeleted   MemoryExpired   MemoryRetrieved
+```
+
+Phase 4 added the tool event family (published by the ToolService; payloads
+carry request/tool/risk/session/task ids and reasons, never sensitive
+argument values):
+
+```text
+ToolRequested   ToolAllowed   ToolApprovalRequested
+ToolApproved    ToolRejected  ToolStarted  ToolCompleted  ToolFailed
+ToolDenied
 ```
 
 Event envelope: `{id, type, timestamp, session_id?, task_id?, source, payload}`.

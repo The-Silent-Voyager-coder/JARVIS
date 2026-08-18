@@ -14,45 +14,46 @@ long-running objectives, and recover from failures.
 | Platform | Windows 11 (ASUS Gaming V16, RTX 4050 6 GB VRAM, 16 GB RAM) |
 | Cost | ₹0 / $0 — no paid APIs, no paid hosting, no paid cloud |
 | Language | Python 3.11+ |
-| Status | **Phase 3 — Memory foundation** (SQLite persistence, provenance, CLI) |
+| Status | **Phase 4 — Secure tool system** (files, processes, shell, system) |
 
 ---
 
-## Current Status (Phase 3)
+## Current Status (Phase 4)
 
-Phase 1 delivers the core runtime, Phase 2 the intelligence layer; Phase 3
-adds the memory foundation on top of both:
+Phases 1–3 delivered the core runtime, the intelligence layer, and the memory
+foundation; Phase 4 adds the permissioned tool system on top of all three:
 
-- **Four memory categories**: `working` (session RAM), `long_term` (stable
-  facts/preferences), `episodic` (records of J.A.R.V.I.S. actions),
-  `semantic` (storage/retrieval foundation — no ingestion pipeline yet)
-- **Typed `Memory` model**: `mem_<hex>` UUID ids, structured JSON or plain
-  text content, `source` + `provenance` tracking, confidence 0.0–1.0,
-  timezone-aware UTC timestamps, optional `expires_at`, per-session scoping,
-  auditable soft delete
-- **SQLite persistence** (`jarvis.memory`): schema-versioned migrations
-  (stdlib only), WAL mode, FTS5 full-text search with a safe LIKE fallback,
-  repository abstraction so storage can be swapped without touching business
-  rules
-- **Deterministic retrieval**: filters (type/source/provenance/time/
-  confidence/session) + pagination, ranked by
-  `0.5·relevance + 0.3·confidence + 0.2·recency` with a documented match
-  reason — no embeddings, no LLM search
-- **Lifecycle**: `remember()` requires a deliberate save decision (never
-  automatic), default confidence and per-type retention from config,
-  expiration sweep, `forget()` soft delete — nothing is ever hard-deleted
-- **Memory events**: `MemoryCreated/Updated/Deleted/Expired/Retrieved` carry
-  only ids/types/sources — never content
-- **Failure isolation**: a corrupted/unreachable database degrades the memory
-  subsystem to `unavailable` (file kept as-is) while the rest of the runtime
-  keeps working
-- **CLI**: `jarvis memory health|list|get|delete|stats|search [--json]`
-- **No new dependencies**: stdlib `sqlite3` + FTS5; PyYAML remains the sole
-  runtime dependency
+- **One security pipeline, no bypass**: AI → `ToolRequest` → registry →
+  security policy (ALLOW/ASK/DENY) → approval → execution → audit events.
+  The CLI `tools execute` command drives the identical code path.
+- **Typed tool registry**: 9 built-in tools (`filesystem.list|stat|read|
+  mkdir|write`, `process.list|info`, `system.info`, `shell.execute`) with
+  declared risk levels and JSON-schema validation; duplicate ids and invalid
+  schemas are rejected at registration
+- **Risk levels + modes**: `safe`/`low`/`medium`/`high`/`critical` with a
+  per-mode decision matrix (`normal`/`lockdown`/`development`); `critical`
+  tools are denied in every mode; `lockdown` allows only `safe`; policy `ASK`
+  without an approval provider is denied (fail-closed)
+- **Policy hooks that only tighten**: path security (allowed/denied roots,
+  protected files like `memory.db`/`.env`, secret-stemmed names), shell
+  command classifier (`safe`/`restricted`/`dangerous`/`forbidden`, case- and
+  `.exe`-insensitive), and sensitive-argument detection (credentials denied)
+- **Execution bounds**: no `shell=True` anywhere; every run has a timeout,
+  bounded output (truncation marker), a scrubbed environment (JARVIS secrets
+  never reach tools), and an explicit working directory
+- **Intentional absences**: no `filesystem.delete` and no `process.terminate`
+  tool; `network`/`browser`/`gui` categories reserved for later phases
+- **Audit events**: every attempt (including denials) published with
+  `request_id`/`tool_id`/`risk_level`/`session_id`/`task_id`; sensitive
+  argument values are never included
+- **Failure isolation**: a broken tool configuration degrades the subsystem
+  to `unavailable` while the rest of the runtime keeps working
+- **CLI**: `jarvis tools list|info|health|execute [--json] [--approve]`
+- **No new dependencies**: stdlib only; PyYAML remains the sole runtime
+  dependency
 
-**Not yet implemented**: tools, voice, vision, autonomy, HUD, full OpenCode
-delegation (Phases 4–10), and semantic-memory ingestion (embeddings/vector
-search are explicitly a later enhancement).
+**Not yet implemented**: AI tool-calling loop and OpenCode delegation
+(Phase 5), voice, vision, autonomy, HUD, and semantic-memory ingestion.
 
 ## Development Phases
 
@@ -62,7 +63,7 @@ search are explicitly a later enhancement).
 | 1 | Core runtime (lifecycle, config, events, CLI) | **Done** |
 | 2 | Intelligence (AIProvider abstraction, model router) | **Done** |
 | 3 | Memory (SQLite, provenance) | **Done** |
-| 4 | Tools (files, terminal, apps, git, browser) | Not started |
+| 4 | Tools (files, terminal, processes, system) | **Done** |
 | 5 | OpenCode integration | Not started |
 | 6 | Voice (wake word, STT, TTS) | Not started |
 | 7 | Autonomy (planner, task graph, verification) | Not started |
@@ -83,7 +84,8 @@ jarvis/
 │   ├── observability/   → structured logging
 │   ├── intelligence/    → providers, models, router, benchmark (Phase 2)
 │   ├── memory/          → memory models, SQLite persistence, retrieval (Phase 3)
-│   └── ...              → tools, voice, autonomy (later phases)
+│   ├── tools/           → tool registry, security policy, built-in tools (Phase 4)
+│   └── ...              → voice, autonomy (later phases)
 ├── tests/           → test suite (per-module subdirectories)
 ├── .env.example     → secret template (real secrets never committed)
 └── pyproject.toml   → project metadata; PyYAML is the only runtime dependency
@@ -116,6 +118,16 @@ python -m venv .venv
 .\.venv\Scripts\jarvis.exe memory get mem_<id> --content
 .\.venv\Scripts\jarvis.exe memory delete mem_<id>   # auditable soft delete
 
+# inspect and drive the secure tool system (files/processes/shell/system)
+.\.venv\Scripts\jarvis.exe tools list
+.\.venv\Scripts\jarvis.exe tools info filesystem.write
+.\.venv\Scripts\jarvis.exe tools health
+.\.venv\Scripts\jarvis.exe tools execute system.info
+.\.venv\Scripts\jarvis.exe tools execute shell.execute --approve \
+    'command=["python", "--version"]'
+# medium/high-risk tools need --approve; dangerous commands and paths
+# outside allowed roots are denied by policy either way
+
 # run the test suite, linter, and type checker
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -m ruff check .
@@ -141,9 +153,10 @@ Memory content is shown only with `--content`; every command supports
 4. `docs/CONFIGURATION.md` — how configuration works
 5. `docs/MEMORY.md` — memory schema, lifecycle, retrieval, privacy
 6. `docs/SECURITY_MODEL.md` — permissions and risk levels
-7. `docs/OPENCODE_INTEGRATION.md` — how OpenCode is integrated
-8. `docs/TESTING.md` — testing strategy
-9. `docs/DEPENDENCY_POLICY.md` — dependency rules
+7. `docs/TOOLS.md` — the Phase 4 tool system (pipeline, policy, CLI)
+8. `docs/OPENCODE_INTEGRATION.md` — how OpenCode is integrated
+9. `docs/TESTING.md` — testing strategy
+10. `docs/DEPENDENCY_POLICY.md` — dependency rules
 
 ## Non-Goals (now)
 

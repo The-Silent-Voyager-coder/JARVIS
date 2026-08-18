@@ -53,12 +53,26 @@ tasks:
   persist_interval_seconds: 5
 
 tools:
+  # Explicit working directory for tool execution (never arbitrary CWD).
+  working_directory: "C:/JARVIS/workspaces"
+  # Every tool execution must complete within this timeout.
+  execution_timeout_seconds: 30
+  # Cap on output (bytes) captured per tool execution.
+  max_output_bytes: 65536
+  # Roots tools may touch. Paths are canonicalized; traversal is blocked.
+  allowed_roots:
+    - "C:/JARVIS/workspaces"
+  denied_roots: []
   terminal:
     default_risk: "LOW_WRITE"
   browser:
     default_risk: "READ"
 
 security:
+  # Tool-system security mode: lockdown | normal | development
+  # lockdown: SAFE tools only. normal: SAFE/LOW auto, MEDIUM/HIGH ask.
+  # development: more permissive, but CRITICAL tools are always denied.
+  mode: "normal"
   # allow | ask | deny
   default_mode: "ask"
   allow_auto_approve_read: true
