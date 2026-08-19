@@ -1,11 +1,12 @@
 # Core Interfaces
 
-> Status: **Phase 4 implementation notes added**. Section 1 is implemented as
+> Status: **Phase 5A implementation notes added**. Section 1 is implemented as
 > the provider abstraction and health contract (`jarvis.intelligence`);
 > sections 6 and 7 remain implemented (`jarvis.core.registry`,
 > `jarvis.configuration`); §9 documents the implemented memory interfaces
 > (`jarvis.memory`); §10 documents the implemented tool system
-> (`jarvis.tools`); the remaining sections stay design contracts for later
+> (`jarvis.tools`); §11 documents the implemented agent system
+> (`jarvis.agent`); the remaining sections stay design contracts for later
 > phases. Notation: Python typing + dataclass sketches; exact package layout
 > may shift, semantics must not.
 
@@ -519,3 +520,116 @@ a provider is DENY (fail-closed); `critical` is DENY in every mode; hooks
 tighten. Results are capped at `tools.max_output_bytes` with a truncation
 marker, and every attempt is published as a `TOOL_*` event carrying
 `request_id`/`tool_id`/`risk_level`/`session_id`/`task_id`.
+# 11. Agent System Interfaces (Phase 5A)
+
+Authority hierarchy: **AI ≠ authority; Tool Security = authority; Agent
+Orchestrator = control flow**. Interface contracts below; see
+docs/AGENTS.md for the operating rules.
+
+```python
+# jarvis/agent/models.py (provider-neutral; never OpenCode-specific)
+
+class AgentState(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    EXECUTING_TOOL = "executing_tool"
+    WAITING_FOR_APPROVAL = "waiting_for_approval"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    TIMED_OUT = "timed_out"
+    LIMIT_REACHED = "limit_reached"
+
+class ToolCall:
+    id: str
+    tool_id: str            # registry id, e.g. "filesystem.read"
+    arguments: dict         # structured arguments only
+    sequence: int           # 0-based step index
+
+class ToolCallResult:
+    call: ToolCall
+    success: bool
+    output: Any | None
+    error: str | None
+    duration_ms: float
+    state: AgentState | None = None   # terminal/cancelled marker
+
+class AgentResult:
+    task_id: str
+    state: AgentState
+    steps: int
+    tool_calls: int
+    elapsed_ms: float
+    provider: str | None
+    model: str | None
+    final_text: str | None
+    error: str | None
+    reason: str | None
+    request_id: str
+    started_at: str
+    finished_at: str | None
+    memory_references: int = 0
+    session_id: str | None = None
+    def to_dict(self) -> dict: ...    # JSON-safe, no prompts, no secrets
+```
+
+```python
+class AgentLimits:          # jarvis/agent/limits.py (frozen dataclass)
+    max_steps: int
+    max_tool_calls: int
+    max_wall_time_seconds: float
+    max_single_tool_calls: int
+    max_total_tool_output_bytes: int
+    loop_detection_threshold: int
+
+class AgentOrchestrator:    # jarvis/agent/orchestrator.py
+    def run(self, task: AgentTask, *, limits: AgentLimits,
+            tools: ToolService, intelligence: IntelligenceService,
+            memory: MemoryService | None, cancel_token: CancellationToken,
+            publisher: Callable[[Event], None]) -> AgentResult: ...
+
+class AgentService:         # jarvis/agent/service.py
+    availability: str       # "healthy" | "disabled" | "unavailable"
+    def start(self, config: JarvisConfig) -> None: ...
+    def run(self, prompt: str, *, session_id: str | None = None,
+            provider: str | None = None, model: str | None = None,
+            max_steps: int | None = None) -> AgentResult: ...
+    def cancel(self, task_id: str) -> None: ...
+    def health(self) -> dict: ...   # available/status/enabled/detail/current
+    def register_health_check(self, health_registry) -> None: ...
+
+class AgentApprovalProvider:   # jarvis/agent/approval.py
+    def approve_all(self) -> None: ...
+    def disapprove_all(self) -> None: ...
+    def is_open(self) -> bool: ...
+    def request_approval(self, request, tool, reason) -> ApprovalOutcome: ...
+```
+
+### Loop semantics
+
+- Strictly sequential tool calls — one per step, no parallel calls.
+- `AgentService._require_tool_calling` gates on provider registry wiring,
+  owned provider, `TOOL_CALLING` capability, `READY` state → typed errors,
+  never silent fallback.
+- Every tool call flows through `ToolService.execute` (the security
+  pipeline) — the service never calls a tool directly.
+- Approval: `AgentService` swaps in an `AgentApprovalProvider` for the run
+  and restores the previous provider afterwards; `ASK`-gated calls pause
+  the state machine in `WAITING_FOR_APPROVAL`.
+- Hard limits are enforced against ceilings at the start of every run
+  (smaller limit wins); exhaustion ends the run `LIMIT_REACHED` with the
+  exact `reason`.
+- Cooperative cancellation: `cancel(task_id)` flips the token; checked
+  between steps and before each tool call; approval gates also resolve to
+  cancelled.
+
+### CLI
+
+```text
+jarvis agent health [--config PATH] [--json]
+jarvis agent run --prompt TEXT [--session-id SID] [--provider NAME]
+                  [--model NAME] [--max-steps N] [--json] [--config PATH]
+```
+
+Exit codes: `0` completed run / healthy; `1` failure (unavailable provider,
+runtime failure, non-completed state); `2` invalid prompt/configuration.

@@ -14,6 +14,7 @@ from typing import Any, Literal
 from urllib.parse import urlparse
 
 from jarvis.configuration.model import (
+    AgentConfig,
     AIConfig,
     CoreConfig,
     EventsConfig,
@@ -137,6 +138,15 @@ SCHEMA: dict[str, dict[str, Field]] = {
         "denied_roots": Field("path_list", _describe("path_list")),
         "terminal": Field("mapping", "tool defaults mapping"),
         "browser": Field("mapping", "tool defaults mapping"),
+    },
+    "agent": {
+        "enabled": Field("bool", _describe("bool")),
+        "max_steps": Field("positive_int", _describe("positive_int")),
+        "max_tool_calls": Field("positive_int", _describe("positive_int")),
+        "max_wall_time_seconds": Field("positive_number", _describe("positive_number")),
+        "max_single_tool_calls": Field("positive_int", _describe("positive_int")),
+        "max_total_tool_output_bytes": Field("positive_int", _describe("positive_int")),
+        "loop_detection_threshold": Field("positive_int", _describe("positive_int")),
     },
     "security": {
         "mode": Field(
@@ -352,7 +362,42 @@ def validate(raw: dict[str, Any]) -> list[ConfigProblem]:
                 if fname in entry:
                     _check_scalar("voice", f"{sub_name}.{fname}", field, entry[fname], errors)
 
+    _validate_agent_ceilings(raw, errors)
+
     return errors
+
+
+def _validate_agent_ceilings(raw: dict[str, Any], errors: list[ConfigProblem]) -> None:
+    """Reject agent limits above their absolute safety ceilings (Phase 5A)."""
+    from jarvis.agent.limits import (
+        LOOP_DETECTION_THRESHOLD_CEILING,
+        MAX_SINGLE_TOOL_CALLS_CEILING,
+        MAX_STEPS_CEILING,
+        MAX_TOOL_CALLS_CEILING,
+        MAX_TOTAL_TOOL_OUTPUT_BYTES_CEILING,
+        MAX_WALL_TIME_SECONDS_CEILING,
+        check_bounded,
+    )
+
+    agent = raw.get("agent")
+    if not isinstance(agent, dict):
+        return
+    bounded_fields = (
+        ("max_steps", MAX_STEPS_CEILING),
+        ("max_tool_calls", MAX_TOOL_CALLS_CEILING),
+        ("max_wall_time_seconds", MAX_WALL_TIME_SECONDS_CEILING),
+        ("max_single_tool_calls", MAX_SINGLE_TOOL_CALLS_CEILING),
+        ("max_total_tool_output_bytes", MAX_TOTAL_TOOL_OUTPUT_BYTES_CEILING),
+        ("loop_detection_threshold", LOOP_DETECTION_THRESHOLD_CEILING),
+    )
+    for name, ceiling in bounded_fields:
+        value = agent.get(name)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue  # type errors are already reported by the schema pass
+        try:
+            check_bounded(f"agent.{name}", value, ceiling)
+        except ValueError as exc:
+            errors.append(ConfigProblem("agent", name, value, str(exc)))
 
 
 def _matches(kind: Kind, value: Any) -> bool:
@@ -561,6 +606,16 @@ def build_config(raw: dict[str, Any]) -> JarvisConfig:
         ),
     )
 
+    agent = AgentConfig(
+        enabled=bool(raw["agent"]["enabled"]),
+        max_steps=int(raw["agent"]["max_steps"]),
+        max_tool_calls=int(raw["agent"]["max_tool_calls"]),
+        max_wall_time_seconds=float(raw["agent"]["max_wall_time_seconds"]),
+        max_single_tool_calls=int(raw["agent"]["max_single_tool_calls"]),
+        max_total_tool_output_bytes=int(raw["agent"]["max_total_tool_output_bytes"]),
+        loop_detection_threshold=int(raw["agent"]["loop_detection_threshold"]),
+    )
+
     security = SecurityConfig(
         default_mode=SecurityMode(str(raw["security"]["default_mode"])),
         mode=ToolSecurityMode(str(raw["security"]["mode"])),
@@ -593,6 +648,7 @@ def build_config(raw: dict[str, Any]) -> JarvisConfig:
         memory=memory,
         tasks=tasks,
         tools=tools,
+        agent=agent,
         security=security,
         voice=voice,
     )

@@ -147,3 +147,32 @@ enforcement layer every tool execution passes through. Full contract:
 - **Phase 4 intentional absences.** No delete tool, no process-kill tool,
   and no `network`/`browser`/`gui` tools. §6 (permission manager with policy
   files, sandboxing, audit file) remains Phase 9 hardening scope.
+## 9. Agent Loop Security (Phase 5A)
+
+The agent loop never weakens the tool security pipeline:
+
+- **No bypass.** `AgentOrchestrator` calls tools exclusively through
+  `ToolService.execute` — the same policy/approval/execution pipeline the
+  CLI uses. There is no internal shortcut, no direct tool invocation, and no
+  OpenCode delegation in the agent loop.
+- **AI ≠ authority.** The LLM proposes tool calls; the security layer
+  decides. An LLM asking for a shell, a delete, or a registry change is
+  evaluated like any other action.
+- **Approval is a real gate.** `ASK`-level calls pause the run in
+  `WAITING_FOR_APPROVAL` until a human decides; `AgentService` swaps in the
+  `AgentApprovalProvider` for the run and restores the previous provider
+  afterwards. A denial is fed back to the LLM as a failed tool result —
+  never auto-approved, never silently retried.
+- **Bounded by construction.** Step count, tool-call count, wall-clock,
+  per-tool repeat count, cumulative output bytes, and loop detection are
+  enforced with hard ceilings; runaway or repetitive behavior ends the run
+  `LIMIT_REACHED`/`TIMED_OUT`.
+- **Cancellable at every point.** Cooperative cancellation is checked
+  between steps and before every tool call; a pending approval gate resolves
+  to cancelled. A cancelled run never leaves an orphaned tool process.
+- **Auditable.** `AGENT_*` events carry ids/reasons only — prompts and
+  tool-argument values are never published; Phase 4 `TOOL_*` audit events
+  keep flowing for every real execution.
+- **Secrets stay out of context.** Memory retrieval for the loop is bounded
+  (`_MEMORY_REFERENCE_LIMIT = 5`) and degrades silently on failure; results
+  are never auto-saved to long-term memory.

@@ -27,6 +27,7 @@ from jarvis.exceptions import LifecycleError
 from jarvis.observability.logging import flush_logging, setup_logging
 
 if TYPE_CHECKING:
+    from jarvis.agent.service import AgentService
     from jarvis.intelligence.service import IntelligenceService
     from jarvis.memory.service import MemoryService
     from jarvis.tools.service import ToolService
@@ -47,6 +48,7 @@ class Runtime:
         self._intelligence: IntelligenceService | None = None
         self._memory: MemoryService | None = None
         self._tools: ToolService | None = None
+        self._agent: AgentService | None = None
 
     @classmethod
     def create(cls, config_path: str | None = None) -> Runtime:
@@ -106,6 +108,12 @@ class Runtime:
             raise LifecycleError("tool service not initialized")
         return self._tools
 
+    @property
+    def agent(self) -> AgentService:
+        if self._agent is None:
+            raise LifecycleError("agent service not initialized")
+        return self._agent
+
     # --- lifecycle -----------------------------------------------------
 
     async def start(self) -> None:
@@ -160,6 +168,16 @@ class Runtime:
             tool_service.start(self._config)
             tool_service.register_health_check(health)
 
+            from jarvis.agent.service import AgentService
+
+            agent_service = AgentService(
+                intelligence=service, tools=tool_service, memory=memory_service
+            )
+            self._agent = agent_service
+            agent_service.publisher = bus.publish_nowait
+            agent_service.start(self._config)
+            agent_service.register_health_check(health)
+
             registry.start_all()
 
             await bus.publish(
@@ -188,6 +206,8 @@ class Runtime:
             self._lifecycle.transition(RuntimeState.STOPPING)
 
         bus = self._bus
+        if self._agent is not None:
+            self._agent.shutdown()
         if self._intelligence is not None:
             self._intelligence.shutdown()
         if self._memory is not None:

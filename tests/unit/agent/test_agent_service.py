@@ -1,0 +1,386 @@
+"""AgentService facade tests: availability, gating, limits, approval wiring,
+memory retrieval, cancellation, and health."""
+
+from __future__ import annotations
+
+import threading
+from pathlib import Path
+
+import pytest
+
+from jarvis.agent.approval import AgentApprovalProvider
+from jarvis.agent.models import AgentState
+from jarvis.agent.service import AgentService
+from jarvis.configuration.loader import load_config
+from jarvis.core.health import HealthRegistry, HealthStatus
+from jarvis.exceptions import (
+    AgentUnavailableError,
+    AgentValidationError,
+    ProviderCapabilityError,
+    ProviderUnavailableError,
+)
+from jarvis.intelligence.provider import ProviderState
+from jarvis.tools.approval import DeterministicApprovalProvider
+from jarvis.tools.models import ApprovalOutcome
+from tests.unit.agent._fakes import (
+    FakeIntelligence,
+    FakeProvider,
+    FakeProviderRegistry,
+    FakeTools,
+    gate_handler,
+    text_handler,
+    tool_handler,
+)
+
+
+class FakeIntelligenceService(FakeIntelligence):
+    """FakeIntelligence plus the provider registry the service gate needs."""
+
+    def __init__(
+        self,
+        registry: FakeProviderRegistry,
+        handlers: list | None = None,
+        *,
+        keep_last: bool = True,
+    ) -> None:
+        super().__init__(handlers, keep_last=keep_last)
+        self.registry = registry
+
+
+class _MemoryItem:
+    def __init__(self, memory_id: str, content: str = "reference") -> None:
+        self.id = memory_id
+        self.content = content
+        self.confidence = 0.9
+        self.memory_type = _MemoryType.LONG_TERM
+
+
+class _MemoryType:
+    LONG_TERM = type("_MemoryTypeValue", (), {"value": "long_term"})()
+
+
+class _Ranked:
+    def __init__(self, memory) -> None:
+        self.memory = memory
+
+
+class _Retrieval:
+    def __init__(self, items: list) -> None:
+        self.items = items
+
+
+class FakeMemoryService:
+    def __init__(self, *, items: list | None = None, fail: bool = False) -> None:
+        self._items = items or []
+        self._fail = fail
+        self.calls: list[tuple] = []
+
+    def retrieve(self, query=None, *, session_id=None, limit=None, **kwargs):
+        self.calls.append((query, session_id, limit))
+        if self._fail:
+            raise RuntimeError("memory database corrupted")
+        return _Retrieval([_Ranked(item) for item in self._items])
+
+
+def _config(tmp_path: Path, *, agent_enabled: bool = True) -> object:
+    path = tmp_path / "jarvis.yaml"
+    d = str(tmp_path).replace("\\", "/")
+    path.write_text(
+        f"""
+core:
+  name: "J.A.R.V.I.S. Test"
+  data_dir: "{d}/data"
+  cache_dir: "{d}/cache"
+  logs_dir: "{d}/logs"
+  runtime_dir: "{d}/runtime"
+  workspaces_dir: "{d}/workspaces"
+  models_dir: "{d}/models"
+  backups_dir: "{d}/backups"
+  timezone: "UTC"
+logging:
+  level: "DEBUG"
+  retention_days: 7
+memory:
+  enabled: false
+  database_path: "{d}/data/memory.db"
+  auto_save_conversations: false
+  default_confidence: 0.8
+  retention_days: 365
+agent:
+  enabled: {"true" if agent_enabled else "false"}
+  max_steps: 12
+  max_tool_calls: 8
+  max_wall_time_seconds: 300.0
+  max_single_tool_calls: 3
+  max_total_tool_output_bytes: 2097152
+  loop_detection_threshold: 3
+""",
+        encoding="utf-8",
+    )
+    return load_config(path, environ={}).config
+
+
+def _service(tmp_path: Path, *, enabled: bool = True) -> AgentService:
+    registry = FakeProviderRegistry({"local": FakeProvider("local")})
+    service = AgentService(
+        intelligence=FakeIntelligenceService(registry),
+        tools=FakeTools(),
+    )
+    service.start(_config(tmp_path, agent_enabled=enabled))
+    return service
+
+
+def test_run_before_start_raises_unavailable() -> None:
+    service = AgentService()
+    with pytest.raises(AgentUnavailableError, match="not started"):
+        service.run("do something")
+
+
+def test_unwired_dependencies_raise_unavailable(tmp_path: Path) -> None:
+    service = AgentService()
+    service.start(_config(tmp_path))
+    with pytest.raises(AgentUnavailableError, match="not wired"):
+        service.run("do something")
+
+
+def test_disabled_by_config_raises_unavailable(tmp_path: Path) -> None:
+    service = AgentService()
+    service.start(_config(tmp_path, agent_enabled=False))
+    with pytest.raises(AgentUnavailableError, match="disabled"):
+        service.run("do something")
+
+
+def test_empty_prompt_raises_validation(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    with pytest.raises(AgentValidationError, match="non-empty prompt"):
+        service.run("   ")
+
+
+def test_unknown_provider_raises_unavailable(tmp_path: Path) -> None:
+    service = AgentService(
+        intelligence=FakeIntelligenceService(FakeProviderRegistry()),
+        tools=FakeTools(),
+    )
+    service.start(_config(tmp_path))
+    with pytest.raises(ProviderUnavailableError, match="not registered"):
+        service.run("do something")
+
+
+def test_unready_provider_raises_unavailable(tmp_path: Path) -> None:
+    provider = FakeProvider("local", state=ProviderState.UNAVAILABLE)
+    service = AgentService(
+        intelligence=FakeIntelligenceService(FakeProviderRegistry({"local": provider})),
+        tools=FakeTools(),
+    )
+    service.start(_config(tmp_path))
+    with pytest.raises(ProviderUnavailableError, match="unavailable"):
+        service.run("do something")
+
+
+def test_provider_without_tool_calling_raises_capability(tmp_path: Path) -> None:
+    provider = FakeProvider("local", tool_calling=False)
+    service = AgentService(
+        intelligence=FakeIntelligenceService(FakeProviderRegistry({"local": provider})),
+        tools=FakeTools(),
+    )
+    service.start(_config(tmp_path))
+    with pytest.raises(ProviderCapabilityError, match="tool calling"):
+        service.run("do something")
+
+
+def test_plain_run_completes(tmp_path: Path) -> None:
+    intelligence = FakeIntelligenceService(
+        FakeProviderRegistry({"local": FakeProvider("local")}),
+        [text_handler("understood")],
+        keep_last=False,
+    )
+    service = AgentService(intelligence=intelligence, tools=FakeTools())
+    service.start(_config(tmp_path))
+    result = service.run("remember this fact")
+    assert result.state is AgentState.COMPLETED
+    assert result.final_text == "understood"
+    assert result.provider == "fake"
+    assert result.model == "fake-model"
+    assert result.tool_calls == 0
+    assert result.steps
+    assert service.health()["current"] == {}
+    assert intelligence.requests
+
+
+def test_max_steps_override_is_applied(tmp_path: Path) -> None:
+    intelligence = FakeIntelligenceService(
+        FakeProviderRegistry({"local": FakeProvider("local")}),
+        [tool_handler("filesystem.list")],
+        keep_last=True,
+    )
+    service = AgentService(intelligence=intelligence, tools=FakeTools())
+    service.start(_config(tmp_path))
+    result = service.run("keep calling", max_steps=2)
+    assert result.state is AgentState.LIMIT_REACHED
+    assert result.reason == "max_steps"
+    assert result.tool_calls == 2
+
+
+def test_approval_provider_is_installed_and_restored(tmp_path: Path) -> None:
+    installed_before = DeterministicApprovalProvider(ApprovalOutcome.APPROVED)
+    tools = FakeTools(approval=installed_before)
+    intelligence = FakeIntelligenceService(
+        FakeProviderRegistry({"local": FakeProvider("local")}),
+        [tool_handler("filesystem.list"), text_handler("done")],
+        keep_last=False,
+    )
+    service = AgentService(intelligence=intelligence, tools=tools)
+    service.start(_config(tmp_path))
+    result = service.run("call the tool", max_steps=2)
+    assert result.state is AgentState.COMPLETED
+    assert result.tool_calls == 1
+    assert tools.approval is installed_before
+
+
+def test_run_with_custom_approval_decides(tmp_path: Path) -> None:
+    tools = FakeTools()
+    tools.mark_requires_approval("filesystem.list")
+    intelligence = FakeIntelligenceService(
+        FakeProviderRegistry({"local": FakeProvider("local")}),
+        [tool_handler("filesystem.list"), text_handler("done")],
+        keep_last=False,
+    )
+    service = AgentService(intelligence=intelligence, tools=tools)
+    service.start(_config(tmp_path))
+    approval = AgentApprovalProvider(wait_seconds=5.0)
+    approval.approve("call_1")
+    result = service.run("call the tool", max_steps=2, approval=approval)
+    assert result.state is AgentState.COMPLETED
+    assert result.tool_calls == 1
+
+
+def test_memory_retrieval_is_bounded_and_plugged(tmp_path: Path) -> None:
+    memory = FakeMemoryService(items=[_MemoryItem("m1"), _MemoryItem("m2")])
+    intelligence = FakeIntelligenceService(
+        FakeProviderRegistry({"local": FakeProvider("local")}),
+        [text_handler("done")],
+        keep_last=False,
+    )
+    service = AgentService(intelligence=intelligence, tools=FakeTools(), memory=memory)
+    service.start(_config(tmp_path))
+    result = service.run("what do you remember", session_id="s1")
+    assert result.state is AgentState.COMPLETED
+    assert memory.calls == [("what do you remember", "s1", 5)]
+
+
+def test_memory_failure_degrades_silently(tmp_path: Path) -> None:
+    service = AgentService(
+        intelligence=FakeIntelligenceService(
+            FakeProviderRegistry({"local": FakeProvider("local")}),
+            [text_handler("done")],
+            keep_last=False,
+        ),
+        tools=FakeTools(),
+        memory=FakeMemoryService(fail=True),
+    )
+    service.start(_config(tmp_path))
+    result = service.run("do it anyway")
+    assert result.state is AgentState.COMPLETED
+
+
+def test_cancel_during_tool_call(tmp_path: Path) -> None:
+    entered = threading.Event()
+    release = threading.Event()
+    intelligence = FakeIntelligenceService(
+        FakeProviderRegistry({"local": FakeProvider("local")}),
+        [gate_handler(entered, release, tool_call=True)],
+        keep_last=False,
+    )
+    service = AgentService(intelligence=intelligence, tools=FakeTools())
+    service.start(_config(tmp_path))
+    outcome: dict = {}
+
+    def worker() -> None:
+        outcome["result"] = service.run("blocked call")
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    assert entered.wait(timeout=5)
+    service.cancel()
+    release.set()
+    thread.join(timeout=10)
+    assert not thread.is_alive()
+    result = outcome["result"]
+    assert result.state is AgentState.CANCELLED
+    assert result.reason == "cancelled"
+    assert service.health()["current"] == {}
+
+
+def test_cancel_without_run_is_safe(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    service.cancel()
+    assert service.health()["available"]
+
+
+def test_health_lifecycle(tmp_path: Path) -> None:
+    service = AgentService()
+    before = service.health()
+    assert before == {
+        "available": False,
+        "status": "unavailable",
+        "detail": "agent service not started",
+        "enabled": False,
+        "current": {},
+    }
+    service.start(_config(tmp_path))
+    healthy = service.health()
+    assert healthy["available"] is True
+    assert healthy["status"] == "healthy"
+    assert "steps<=" in healthy["detail"]
+    assert healthy["enabled"] is True
+    assert healthy["current"] == {}
+    service.shutdown()
+    stopped = service.health()
+    assert stopped["status"] == "disabled"
+    assert stopped["detail"] == "agent service stopped"
+
+
+def test_health_during_run_reports_current(tmp_path: Path) -> None:
+    entered = threading.Event()
+    release = threading.Event()
+    intelligence = FakeIntelligenceService(
+        FakeProviderRegistry({"local": FakeProvider("local")}),
+        [gate_handler(entered, release)],
+        keep_last=False,
+    )
+    service = AgentService(intelligence=intelligence, tools=FakeTools())
+    service.start(_config(tmp_path))
+    outcome: dict = {}
+
+    def worker() -> None:
+        outcome["result"] = service.run("blocked")
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    assert entered.wait(timeout=5)
+    current = service.health()["current"]
+    assert current["state"] == AgentState.RUNNING.value
+    assert current["steps"] == 0
+    release.set()
+    thread.join(timeout=10)
+    result = outcome["result"]
+    assert result.state is AgentState.COMPLETED
+    assert service.health()["current"] == {}
+
+
+def test_health_check_registration(tmp_path: Path) -> None:
+    registry = HealthRegistry()
+    service = _service(tmp_path)
+    service.register_health_check(registry)
+    assert registry.check("agent").status is HealthStatus.HEALTHY
+
+    unstarted = AgentService()
+    unstarted.register_health_check(registry)
+    assert registry.check("agent").status is HealthStatus.UNHEALTHY
+
+
+def test_shutdown_clears_state(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    service.shutdown()
+    with pytest.raises(AgentUnavailableError):
+        service.run("again")

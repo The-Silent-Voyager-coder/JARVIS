@@ -135,6 +135,23 @@ class ToolsConfig:
 
 
 @dataclass(frozen=True)
+class AgentConfig:
+    """Agent-loop settings (Phase 5A bounded tool calling).
+
+    Limits are validated against absolute safety ceilings at load time
+    (jarvis.agent.limits); the orchestrator re-validates every run.
+    """
+
+    enabled: bool
+    max_steps: int
+    max_tool_calls: int
+    max_wall_time_seconds: float
+    max_single_tool_calls: int
+    max_total_tool_output_bytes: int
+    loop_detection_threshold: int
+
+
+@dataclass(frozen=True)
 class SecurityConfig:
     default_mode: SecurityMode
     mode: ToolSecurityMode
@@ -180,5 +197,6 @@ class JarvisConfig:
     memory: MemoryConfig
     tasks: TasksConfig
     tools: ToolsConfig
+    agent: AgentConfig
     security: SecurityConfig
     voice: VoiceConfig

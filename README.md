@@ -14,7 +14,7 @@ long-running objectives, and recover from failures.
 | Platform | Windows 11 (ASUS Gaming V16, RTX 4050 6 GB VRAM, 16 GB RAM) |
 | Cost | ₹0 / $0 — no paid APIs, no paid hosting, no paid cloud |
 | Language | Python 3.11+ |
-| Status | **Phase 4 — Secure tool system** (files, processes, shell, system) |
+| Status | **Phase 5A — Bounded agent tool loop** (AI proposes, security decides) |
 
 ---
 
@@ -52,8 +52,37 @@ foundation; Phase 4 adds the permissioned tool system on top of all three:
 - **No new dependencies**: stdlib only; PyYAML remains the sole runtime
   dependency
 
-**Not yet implemented**: AI tool-calling loop and OpenCode delegation
-(Phase 5), voice, vision, autonomy, HUD, and semantic-memory ingestion.
+## Current Status (Phase 5A)
+
+Phase 5A adds the bounded, auditable AI↔tool loop on top of all four layers:
+
+- **Bounded AI↔tool loop**: the agent proposes one structured tool call per
+  step → the tool security pipeline executes it → the result feeds the next
+  step; provider-neutral models throughout (never OpenCode-specific)
+- **No bypass**: the loop drives `ToolService.execute` only — the same
+  policy/approval/audit pipeline as `jarvis tools execute`
+  (**AI ≠ authority; Tool Security = authority; Agent Orchestrator =
+  control flow**)
+- **Validated state machine**: `pending → running ⇄ executing_tool ⇄
+  waiting_for_approval`; exactly one terminal state per run — `completed` /
+  `failed` / `cancelled` / `timed_out` / `limit_reached` (see
+  `docs/AGENTS.md`)
+- **Hard limits with ceilings**: step count, tool-call count, wall clock,
+  per-tool repeat count, cumulative output bytes, and loop detection
+  (exact-match signatures); the smaller applicable limit always wins
+- **Approval is a real gate**: `ASK`-level calls pause the run in
+  `WAITING_FOR_APPROVAL` until a human decides; denials are fed back to the
+  LLM as failed tool results — never auto-approved
+- **Cooperative cancellation** at every checkpoint + wall-clock timeout +
+  `AGENT_*` audit events (no prompts, no secrets; Phase 4 `TOOL_*` events
+  keep flowing)
+- **CLI**: `jarvis agent health|run --prompt … [--json]`; exit 0/1/2
+- **Tests**: full agent unit suite (incl. a threaded approval-deadlock
+  regression), offline CLI integration suite, scripted mock-provider
+  tool-call tests; ruff + mypy clean
+
+**Not yet implemented**: OpenCode delegation inside the agent loop, voice,
+vision, unattended autonomy, HUD, and semantic-memory ingestion.
 
 ## Development Phases
 
@@ -64,6 +93,7 @@ foundation; Phase 4 adds the permissioned tool system on top of all three:
 | 2 | Intelligence (AIProvider abstraction, model router) | **Done** |
 | 3 | Memory (SQLite, provenance) | **Done** |
 | 4 | Tools (files, terminal, processes, system) | **Done** |
+| 5A | Agent loop (bounded AI↔tool, limits, approval, cancellation) | **Done** |
 | 5 | OpenCode integration | Not started |
 | 6 | Voice (wake word, STT, TTS) | Not started |
 | 7 | Autonomy (planner, task graph, verification) | Not started |
@@ -85,6 +115,7 @@ jarvis/
 │   ├── intelligence/    → providers, models, router, benchmark (Phase 2)
 │   ├── memory/          → memory models, SQLite persistence, retrieval (Phase 3)
 │   ├── tools/           → tool registry, security policy, built-in tools (Phase 4)
+│   ├── agent/           → bounded tool loop, limits, approval, events (Phase 5A)
 │   └── ...              → voice, autonomy (later phases)
 ├── tests/           → test suite (per-module subdirectories)
 ├── .env.example     → secret template (real secrets never committed)
@@ -128,14 +159,21 @@ python -m venv .venv
 # medium/high-risk tools need --approve; dangerous commands and paths
 # outside allowed roots are denied by policy either way
 
+# inspect and drive the bounded agent loop (needs a tool-calling provider)
+.\.venv\Scripts\jarvis.exe agent health
+.\.venv\Scripts\jarvis.exe agent run --prompt "summarize this repo"
+.\.venv\Scripts\jarvis.exe agent run --prompt "check the system" --json
+# runs are always bounded: step/tool-call/wall-clock limits with ceilings
+
 # run the test suite, linter, and type checker
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -m ruff check .
 .\.venv\Scripts\python.exe -m mypy jarvis
 ```
 
-Exit codes: `0` success, `1` general failure (e.g. a provider unhealthy or a
-memory not found), `2` invalid configuration/input.
+Exit codes: `0` success, `1` general failure (e.g. a provider unhealthy, a
+memory not found, or an agent run that did not complete), `2` invalid
+configuration/input.
 
 The `ai` commands probe configured providers (`ai.providers.*`); Ollama
 absent or not running is fine — the provider reports `unavailable` and the
@@ -149,19 +187,22 @@ Memory content is shown only with `--content`; every command supports
 
 1. `docs/ARCHITECTURE.md` — how J.A.R.V.I.S. is built
 2. `docs/DEVELOPMENT_RULES.md` — hard engineering rules for contributors/agents
-3. `docs/INTERFACES.md` — core interfaces (AIProvider, memory, events, tasks)
+3. `docs/INTERFACES.md` — core interfaces (AIProvider, memory, events, tasks, agent)
 4. `docs/CONFIGURATION.md` — how configuration works
 5. `docs/MEMORY.md` — memory schema, lifecycle, retrieval, privacy
 6. `docs/SECURITY_MODEL.md` — permissions and risk levels
 7. `docs/TOOLS.md` — the Phase 4 tool system (pipeline, policy, CLI)
-8. `docs/OPENCODE_INTEGRATION.md` — how OpenCode is integrated
-9. `docs/TESTING.md` — testing strategy
-10. `docs/DEPENDENCY_POLICY.md` — dependency rules
+8. `docs/AGENTS.md` — the Phase 5A bounded agent loop (rules, state machine, limits)
+9. `docs/OPENCODE_INTEGRATION.md` — how OpenCode is integrated
+10. `docs/TESTING.md` — testing strategy
+11. `docs/DEPENDENCY_POLICY.md` — dependency rules
 
 ## Non-Goals (now)
 
 - UI/HUD, animations, decorative interfaces (Phase 10)
 - Voice pipeline (Phase 6)
 - Vision (Phase 8)
-- Autonomous agents (Phase 7)
+- Unattended multi-agent orchestration (Phase 7; the Phase 5A loop is
+  single-run and user-initiated)
+- Unbounded autonomy or OpenCode delegation inside the agent loop
 - Any paid service integration

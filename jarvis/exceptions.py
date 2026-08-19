@@ -87,3 +87,35 @@ class ToolExecutionError(ToolError):
 
 class ToolUnavailableError(ToolError):
     """The tool subsystem failed to start and cannot serve requests."""
+
+
+class AgentError(JarvisError):
+    """The agent subsystem failed (orchestration, limits, or lifecycle)."""
+
+
+class AgentValidationError(AgentError):
+    """An agent model or request did not pass validation."""
+
+
+class AgentStateError(AgentError):
+    """An invalid agent state transition was attempted."""
+
+
+class AgentLimitError(AgentError):
+    """An agent loop limit was reached (bounded execution enforced)."""
+
+    def __init__(self, message: str, *, kind: str = "limit") -> None:
+        super().__init__(message)
+        self.kind = kind
+
+
+class AgentCancelledError(AgentError):
+    """The agent task was cancelled."""
+
+
+class AgentTimeoutError(AgentError):
+    """The agent task exceeded its wall-clock limit."""
+
+
+class AgentUnavailableError(AgentError):
+    """The agent subsystem failed to start and cannot serve requests."""

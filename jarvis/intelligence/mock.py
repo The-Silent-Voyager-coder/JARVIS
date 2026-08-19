@@ -41,6 +41,16 @@ class MockProvider(AIProvider):
     - capabilities: additional declared capabilities beyond TEXT_GENERATION
       (e.g. {Capability.STREAMING}) to exercise streaming paths.
     - model_ids: advertised model list (defaults to ("mock-model",)).
+    - script: deterministic response sequence for agent-loop tests. Each
+      entry is a dict with optional "content" (str) and "tool_calls"
+      (list of {"id", "name", "arguments"}), e.g.:
+          ({"tool_calls": [{"id": "call_1", "name": "system.info",
+                            "arguments": {}}]},
+           {"content": "all done"})
+      Entries are consumed in order on successive generate() calls; once the
+      script is exhausted the provider falls back to its default response.
+      When the script contains tool calls, TOOL_CALLING is declared
+      automatically (a provider that returns tool calls supports them).
     """
 
     def __init__(
@@ -51,17 +61,21 @@ class MockProvider(AIProvider):
         latency_ms: float = 0.0,
         capabilities: set[Capability] | None = None,
         model_ids: tuple[str, ...] = ("mock-model",),
+        script: tuple[dict[str, Any], ...] | None = None,
     ) -> None:
         super().__init__(provider_id)
         self._set_state(ProviderState.READY)
         self.fail_on_generate = fail_on_generate
         self.latency_ms = max(0.0, latency_ms)
+        declared = set(capabilities or set())
+        if script and any(entry.get("tool_calls") for entry in script):
+            declared.add(Capability.TOOL_CALLING)
         self._capabilities = ProviderCapabilities(
-            capabilities=frozenset(
-                {Capability.TEXT_GENERATION, *(capabilities or set())}
-            ),
+            capabilities=frozenset({Capability.TEXT_GENERATION, *declared}),
             model_ids=model_ids,
         )
+        self._script = script
+        self._script_index = 0
         self._cancelled: set[str] = set()
 
     # --- surface -------------------------------------------------------
@@ -95,6 +109,13 @@ class MockProvider(AIProvider):
             raise ProviderError("mock provider is configured to fail")
         if request.tools and not self._capabilities.supports(Capability.TOOL_CALLING):
             self._require_capability(Capability.TOOL_CALLING)
+        model = request.model or (
+            self._capabilities.model_ids[0]
+            if self._capabilities.model_ids
+            else "mock-model"
+        )
+        if self._script is not None:
+            return self._scripted_response(request, model)
         prompt = " ".join(
             message.content for message in request.messages if isinstance(message.content, str)
         )
@@ -114,15 +135,52 @@ class MockProvider(AIProvider):
         return AIResponse(
             request_id=request.request_id,
             provider=self._provider_id,
-            model=request.model or (
-                self._capabilities.model_ids[0]
-                if self._capabilities.model_ids
-                else "mock-model"
-            ),
+            model=model,
             content=f"mock:{prompt[:64] or 'empty'}",
             finish_reason=FinishReason.STOP,
             usage=usage,
             tool_calls=tool_calls,
+        )
+
+    def _scripted_response(self, request: AIRequest, model: str) -> AIResponse:
+        prompt = " ".join(
+            message.content for message in request.messages if isinstance(message.content, str)
+        )
+        usage = TokenUsage(
+            prompt_tokens=len(prompt), completion_tokens=4, total_tokens=len(prompt) + 4
+        )
+        if self._script is None or self._script_index >= len(self._script):
+            return AIResponse(
+                request_id=request.request_id,
+                provider=self._provider_id,
+                model=model,
+                content=f"mock:{prompt[:64] or 'empty'}",
+                finish_reason=FinishReason.STOP,
+                usage=usage,
+            )
+        entry = self._script[self._script_index]
+        self._script_index += 1
+        raw_calls = entry.get("tool_calls") or []
+        calls = [
+            ToolCall(
+                id=str(call["id"]),
+                name=str(call["name"]),
+                arguments=dict(call.get("arguments") or {}),
+            )
+            for call in raw_calls
+        ]
+        finish = FinishReason.TOOL_CALL if calls else FinishReason.STOP
+        requested = entry.get("finish_reason")
+        if requested is not None:
+            finish = FinishReason(str(requested))
+        return AIResponse(
+            request_id=request.request_id,
+            provider=self._provider_id,
+            model=model,
+            content=entry.get("content"),
+            finish_reason=finish,
+            usage=usage,
+            tool_calls=calls or None,
         )
 
     async def stream(self, request: AIRequest) -> Any:
@@ -158,4 +216,5 @@ class MockProvider(AIProvider):
 
     def reset(self) -> None:
         self._cancelled.clear()
+        self._script_index = 0
         self.fail_on_generate = False

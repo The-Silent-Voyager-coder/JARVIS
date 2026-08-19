@@ -9,7 +9,7 @@ import pytest
 
 from jarvis.exceptions import ProviderCapabilityError, ProviderError
 from jarvis.intelligence.mock import MockProvider
-from jarvis.intelligence.models import AIRequest, Message, ToolDefinition
+from jarvis.intelligence.models import AIRequest, Message, ToolCall, ToolDefinition
 from jarvis.intelligence.provider import Capability, ProviderState
 
 
@@ -134,3 +134,87 @@ def test_tool_calling_supported() -> None:
     assert response.tool_calls is not None
     assert response.tool_calls[0].name == "lookup"
     assert response.tool_calls[0].arguments == {"query": "query data"}
+
+
+def test_script_consumed_in_order_concluding_with_text() -> None:
+    provider = MockProvider(
+        script=(
+            {
+                "tool_calls": [
+                    {"id": "call_1", "name": "system.info", "arguments": {}}
+                ]
+            },
+            {"content": "all done"},
+        )
+    )
+    provider.init()
+    first = provider.generate(AIRequest(messages=[Message.user("go")]))
+    assert first.finish_reason.value == "tool_call"
+    assert first.tool_calls == [
+        ToolCall(id="call_1", name="system.info", arguments={})
+    ]
+    second = provider.generate(AIRequest(messages=[Message.user("go")]))
+    assert second.tool_calls is None
+    assert second.content == "all done"
+
+
+def test_script_with_tool_calls_declares_tool_calling() -> None:
+    provider = MockProvider(
+        script=({"tool_calls": [{"id": "call_1", "name": "t", "arguments": {}}]},)
+    )
+    assert provider.capabilities().supports(Capability.TOOL_CALLING)
+
+
+def test_script_exhaustion_falls_back_to_default() -> None:
+    provider = MockProvider(
+        script=(
+            {
+                "tool_calls": [
+                    {"id": "call_1", "name": "system.info", "arguments": {}}
+                ]
+            },
+        )
+    )
+    provider.init()
+    provider.generate(AIRequest(messages=[Message.user("go")]))
+    fallback = provider.generate(AIRequest(messages=[Message.user("wave")]))
+    assert fallback.tool_calls is None
+    assert fallback.content == "mock:wave"
+
+
+def test_script_finish_reason_override() -> None:
+    provider = MockProvider(
+        script=({"content": "truncated", "finish_reason": "length"},)
+    )
+    provider.init()
+    response = provider.generate(AIRequest(messages=[Message.user("go")]))
+    assert response.finish_reason.value == "length"
+    assert response.content == "truncated"
+
+
+def test_script_seconds_called_with_tools() -> None:
+    provider = MockProvider(
+        script=({"content": "answered"},),
+        capabilities={Capability.TOOL_CALLING},
+    )
+    provider.init()
+    request = AIRequest(
+        messages=[Message.user("go")],
+        tools=[ToolDefinition(name="system.info", description="info")],
+    )
+    response = provider.generate(request)
+    assert response.content == "answered"
+
+
+def test_reset_rewinds_script_and_clears_flags() -> None:
+    provider = MockProvider(
+        script=({"content": "first"},),
+        capabilities={Capability.TOOL_CALLING},
+    )
+    provider.init()
+    provider.generate(AIRequest(messages=[Message.user("go")]))
+    provider.fail_on_generate = True
+    provider.reset()
+    assert provider.fail_on_generate is False
+    response = provider.generate(AIRequest(messages=[Message.user("again")]))
+    assert response.content == "first"

@@ -18,6 +18,9 @@ Commands:
     jarvis tools health [--config PATH]       tool subsystem health
     jarvis tools execute <tool> NAME=VALUE …  run a tool through the security
             pipeline (denied by default; --approve opts into approvals)
+    jarvis agent health [--config PATH]        agent subsystem health
+    jarvis agent run --prompt "…" [--config PATH]  run a bounded agent task
+            through the same security pipeline (max steps, approvals, limits)
 
 Exit codes: 0 success, 1 general failure, 2 invalid configuration/input.
 Memory content is never printed unless --content is passed.
@@ -34,15 +37,19 @@ from collections.abc import Sequence
 from importlib.metadata import PackageNotFoundError, version
 
 from jarvis import __version__
+from jarvis.agent.models import AgentState
 from jarvis.configuration.loader import load_config
 from jarvis.core.health import HealthStatus
 from jarvis.core.runtime import Runtime
 from jarvis.exceptions import (
+    AgentUnavailableError,
+    AgentValidationError,
     ConfigurationError,
     JarvisError,
     MemoryError,
     MemoryNotFoundError,
     MemoryValidationError,
+    ProviderCapabilityError,
     ToolNotFoundError,
     ToolPermissionDeniedError,
     ToolUnavailableError,
@@ -67,6 +74,7 @@ COMPONENT_LABELS: dict[str, str] = {
     "intelligence": "Intelligence",
     "memory": "Memory",
     "tools": "Tools",
+    "agent": "Agent",
 }
 
 
@@ -213,6 +221,35 @@ def _build_parser() -> argparse.ArgumentParser:
         help="use an approving approval provider (default: denials)",
     )
     tools_execute.add_argument("--session-id", default=None, help="session isolation context")
+
+    agent_parser = subparsers.add_parser("agent", help="agent commands")
+    agent_sub = agent_parser.add_subparsers(dest="agent_command", metavar="SUBCOMMAND")
+
+    agent_health = agent_sub.add_parser("health", help="report agent subsystem health")
+    agent_health.add_argument(
+        "--config", metavar="PATH", default=None, help="configuration file to use"
+    )
+    agent_health.add_argument("--json", action="store_true", help="machine-readable output")
+
+    agent_run = agent_sub.add_parser(
+        "run",
+        help="run a bounded agent task through the security pipeline",
+    )
+    agent_run.add_argument(
+        "--prompt", metavar="TEXT", required=True, help="task prompt for the agent"
+    )
+    agent_run.add_argument(
+        "--config", metavar="PATH", default=None, help="configuration file to use"
+    )
+    agent_run.add_argument("--json", action="store_true", help="machine-readable output")
+    agent_run.add_argument(
+        "--session-id", default=None, help="session isolation context (default: new)"
+    )
+    agent_run.add_argument("--provider", default=None, help="provider to use (default: auto)")
+    agent_run.add_argument("--model", default=None, help="model name override")
+    agent_run.add_argument(
+        "--max-steps", type=int, default=None, help="override the step limit (bounded)"
+    )
 
     return parser
 
@@ -742,6 +779,90 @@ def _cmd_tools_execute(args: argparse.Namespace) -> int:
     return EXIT_OK if result.success else EXIT_FAILURE
 
 
+# --- agent ---------------------------------------------------------------
+
+
+def _cmd_agent_health(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        data = runtime.agent.health()
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK if data.get("available", False) else EXIT_FAILURE
+    print("J.A.R.V.I.S. Agent Health")
+    print(f"  status    {data.get('status', 'unknown')}")
+    print(f"  available {data.get('available', False)}")
+    print(f"  enabled   {data.get('enabled', '-')}")
+    print(f"  detail    {data.get('detail') or ''}")
+    current = data.get("current") or {}
+    if current:
+        print(f"  current   state={current.get('state')} steps={current.get('steps')} "
+              f"tool_calls={current.get('tool_calls')} elapsed_ms={current.get('elapsed_ms')}")
+        if current.get("provider"):
+            print(f"            provider={current['provider']} model={current['model']}")
+        if current.get("error"):
+            print(f"            error={current['error']}")
+    return EXIT_OK if data.get("available", False) else EXIT_FAILURE
+
+
+def _cmd_agent_run(args: argparse.Namespace) -> int:
+    prompt = args.prompt.strip()
+    if not prompt:
+        print("jarvis agent run: prompt must not be empty", file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        result = runtime.agent.run(
+            prompt=prompt,
+            session_id=args.session_id,
+            provider=args.provider,
+            model=args.model,
+            max_steps=args.max_steps,
+        )
+    except (AgentUnavailableError, ProviderCapabilityError) as exc:
+        print(f"jarvis agent run: {exc}", file=sys.stderr)
+        return EXIT_FAILURE
+    except AgentValidationError as exc:
+        print(f"jarvis agent run: {exc}", file=sys.stderr)
+        return EXIT_INVALID
+    except JarvisError as exc:
+        print(f"jarvis agent run: {exc}", file=sys.stderr)
+        return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+
+    completed = result.state is AgentState.COMPLETED
+    if args.json:
+        print(json.dumps(result.to_dict(), indent=2))
+        return EXIT_OK if completed else EXIT_FAILURE
+    print("J.A.R.V.I.S. Agent Run")
+    print(f"  task_id      {result.task_id}")
+    print(f"  state        {result.state.value}")
+    print(f"  steps        {result.steps}")
+    print(f"  tool_calls   {result.tool_calls}")
+    print(f"  duration_ms  {result.duration_ms:.0f}")
+    print(f"  provider     {result.provider or '-'}")
+    print(f"  model        {result.model or '-'}")
+    if result.error:
+        print(f"  error        {result.error}")
+    if result.reason:
+        print(f"  reason       {result.reason}")
+    print("  final text")
+    for line in (result.final_text or "(none)").splitlines():
+        print(f"    {line}")
+    return EXIT_OK if completed else EXIT_FAILURE
+
+
 def _runtime_from_args(args: argparse.Namespace) -> Runtime:
     runtime = Runtime.create(args.config)
     asyncio.run(runtime.start())
@@ -821,6 +942,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.tools_command == "execute":
             return _cmd_tools_execute(args)
         parser.error("tools requires a subcommand: list, info, health, execute")
+    if args.command == "agent":
+        if args.agent_command == "health":
+            return _cmd_agent_health(args)
+        if args.agent_command == "run":
+            return _cmd_agent_run(args)
+        parser.error("agent requires a subcommand: health, run")
 
     parser.print_help()
     return EXIT_OK

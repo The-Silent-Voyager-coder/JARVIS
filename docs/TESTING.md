@@ -154,3 +154,38 @@ no paid CI services.
 - Never mark a failing test "skipped" without a tracked issue + reason.
 - A task is only COMPLETED when its verification steps actually passed —
   tests are the primary evidence (`VerificationCheck.evidence`).
+## 9. Agent Suite (Phase 5A)
+
+Location: `tests/unit/agent/` (unit), `tests/integration/test_cli_agent.py`
+(CLI wiring), scripted tool-call tests in `tests/unit/intelligence/test_mock.py`.
+
+Coverage:
+
+- **State machine**: every transition validated; invalid transitions raise.
+- **Approval**: pause in `WAITING_FOR_APPROVAL`, approve/deny resolution,
+  denial fed back to the LLM (no auto-retry), approval swap restored after
+  the run, `disapprove_all` fail-closed, timeout path, cancellation of a
+  pending gate.
+- **Bounded loop**: `max_steps`, `max_tool_calls`, wall-clock, per-tool
+  repeat count, cumulative output bytes, loop detection — each ends
+  `LIMIT_REACHED`/`TIMED_OUT` with the exact reason.
+- **Provider gating**: unregistered/unavailable provider, missing
+  `TOOL_CALLING` capability → typed errors, no silent fallback.
+- **Cancellation**: between steps, mid-tool-call (threaded test), before
+  any tool call; no orphaned state.
+- **No-bypass proof**: tools are reachable only through the fake
+  `ToolService` pipeline; the security pipeline tests (`tests/tools/`,
+  `tests/security/`) keep asserting deny paths.
+- **Events**: exact `AGENT_*` order for one tool call (started → step →
+  request → completed → step → step → completed → agent_completed);
+  serializable payloads, no prompts/secrets.
+- **Failures**: tool crash → `FAILED`; provider failure → `FAILED`; exactly
+  one terminal state per failure; failed event publisher never crashes the
+  loop.
+- **Deadlock regression**: verification for the approval gate is
+  thread-based; the re-entrant-lock deadlock caught in Phase 5A is covered
+  by the threaded decision tests.
+- **Integration**: `jarvis agent health` (offline, exit 0, json), `agent
+  run` with a scripted mock provider (one safe tool call, then final text),
+  empty-prompt → exit 2, offline no-provider → exit 1, `--max-steps 1` →
+  `limit_reached` exit 1.

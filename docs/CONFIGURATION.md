@@ -216,3 +216,30 @@ Environment overrides use the double-underscore convention:
 
 CLI: `jarvis tools list|info|health|execute [--config PATH] [--json]
 [--approve]`. See `docs/TOOLS.md` for the full tool-system contract.
+## 10. Agent Section (Phase 5A)
+
+| Key | Default | Ceiling | Purpose |
+|---|---|---|---|
+| `agent.enabled` | `true` | – | enable the agent service and `jarvis agent` commands |
+| `agent.max_steps` | `12` | `25` | maximum generate steps per run |
+| `agent.max_tool_calls` | `8` | `50` | maximum tool calls per run |
+| `agent.max_wall_time_seconds` | `300` | `1800` | wall-clock budget per run |
+| `agent.max_single_tool_calls` | `3` | `10` | repeat budget for one identical tool call |
+| `agent.max_total_tool_output_bytes` | `2097152` (2 MiB) | `16777216` | cumulative tool output cap per run |
+| `agent.loop_detection_threshold` | `3` | `25` | exact-match tool-call signature bursts |
+
+Rules:
+
+- Limits are validated with hard ceilings in `jarvis/configuration/validation.py`
+  (via `jarvis/agent/limits.py`); configuration above a ceiling is refused
+  at startup.
+- Run-time overrides (`--max-steps`) are clamped: the smaller applicable
+  limit wins (config or ceiling).
+- `--max-steps N` on `jarvis agent run` overrides the configured step limit
+  for that run only, still clamped to the ceiling.
+
+Environment override convention: `JARVIS_AGENT__MAX_STEPS`,
+`JARVIS_AGENT__ENABLED`.
+
+CLI: `jarvis agent health|run [--config PATH] [--json]`. See
+`docs/AGENTS.md` for the full agent-system contract.

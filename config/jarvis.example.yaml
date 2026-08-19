@@ -68,6 +68,23 @@ tools:
   browser:
     default_risk: "READ"
 
+agent:
+  # Bounded AI tool-calling loop (Phase 5A). All limits are validated
+  # against absolute safety ceilings at load time and are never unlimited.
+  enabled: true
+  # Maximum AI turns per task.
+  max_steps: 12
+  # Maximum total tool calls per task.
+  max_tool_calls: 8
+  # Wall-clock budget for the whole task (seconds).
+  max_wall_time_seconds: 300
+  # Maximum tool calls the AI may request in a single response.
+  max_single_tool_calls: 3
+  # Maximum accumulated tool output bytes per task.
+  max_total_tool_output_bytes: 2097152
+  # Consecutive identical tool calls (same tool + arguments) that end a run.
+  loop_detection_threshold: 3
+
 security:
   # Tool-system security mode: lockdown | normal | development
   # lockdown: SAFE tools only. normal: SAFE/LOW auto, MEDIUM/HIGH ask.

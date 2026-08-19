@@ -1,10 +1,10 @@
 # Architecture
 
-> Status: **Phase 4 — secure tool system implemented**. This is the
+> Status: **Phase 5A — bounded agent tool loop implemented**. This is the
 > contract that all modules must honor. It may be refined by the architect,
 > but not silently violated by implementation. Phase 2 added full detail for
 > the intelligence section; Phase 3 adds the memory section (§5.2); Phase 4
-> adds the tool section (§5.3).
+> adds the tool section (§5.3); Phase 5A adds the agent section (§5.4).
 
 ## 1. Mission
 
@@ -83,6 +83,7 @@ verifies results before claiming success.
 | `intelligence/` | `AIProvider` abstraction, local provider, model router, structured output, streaming | 2 |
 | `memory/` | Memory models, SQLite storage, provenance, retrieval | 3 |
 | `tools/` | Typed tool registry + security pipeline (files, processes, shell, system); policy, path security, shell classifier, approvals | 4 |
+| `agent/` | Bounded AI↔tool loop: validated state machine, limits, loop detection, approval pause, cancellation, events, health | 5A |
 | `integration/` | OpenCode client: health, sessions, events, delegation, results | 5 |
 | `voice/` | Wake word, STT, TTS, voice session management | 6 |
 | `planning/` | Planner, task graph, execution loop, retries, verification, persistence | 7 |
@@ -140,13 +141,14 @@ CREATED → INITIALIZING → RUNNING → STOPPING → STOPPED
 - `Runtime.stop()` is idempotent and safe before start: stop services in
   reverse dependency order → publish `RuntimeStopping` and `RuntimeStopped` →
   close the bus → flush logs → `STOPPED`.
-- Health (`jarvis/core/health.py`): eight checks — `core` (lifecycle state),
+- Health (`jarvis/core/health.py`): nine checks — `core` (lifecycle state),
   `configuration` (loaded + validated), `event_bus` (open and accepting),
   `service_registry` (registered + started), `storage` (data root writable),
   `intelligence` (at least one provider healthy — added in Phase 2), `memory`
-  (memory subsystem HEALTHY — added in Phase 3), and `tools` (tool subsystem
-  HEALTHY — added in Phase 4). Overall status = HEALTHY only when every check
-  is HEALTHY, DEGRADED when at least one is DEGRADED, otherwise UNHEALTHY.
+  (memory subsystem HEALTHY — added in Phase 3), `tools` (tool subsystem
+  HEALTHY — added in Phase 4), and `agent` (agent subsystem HEALTHY — added
+  in Phase 5A). Overall status = HEALTHY only when every check is HEALTHY,
+  DEGRADED when at least one is DEGRADED, otherwise UNHEALTHY.
 
 ## 5.1 Intelligence Layer (Phase 2)
 
@@ -399,6 +401,102 @@ jarvis/tools/
 - Failure isolation: a broken tool configuration leaves the service
   `unavailable` with a detail string; the runtime and CLI keep working.
 
+## 5.4 Agent Layer (Phase 5A)
+
+The agent layer (`jarvis/agent/`) implements the bounded, auditable
+AI→tool→result→AI loop over the Phase 4 ToolService. The orchestrator holds
+the loop logic; the service owns provider gating, limits, approval swap,
+memory retrieval, cancellation, and health. Authority hierarchy:
+**AI ≠ authority; Tool Security = authority; Agent Orchestrator = control
+flow** (see `docs/AGENTS.md`).
+
+### Package layout
+
+```text
+jarvis/agent/
+├── models.py           AgentTask, AgentStep, ToolCall (id/tool_id/structured
+│                       arguments/sequence — never an opaque shell string),
+│                       ToolCallResult, AgentResult, AgentRunStatus,
+│                       AgentLimits (hard-ceilinged), AgentState (validated
+│                       state machine), AGENT_* event constants
+├── limits.py           default limits + ceilings; the smaller applicable
+│                       limit wins (12/8/300/3/2MiB/3 defaults,
+│                       25/50/1800/10/16MiB/25 ceilings)
+├── loopdetect.py       LoopDetector: rolling tool-call signature window
+│                       with exact-match threshold burst detection
+├── cancellation.py     CancellationToken: cooperative cancel requested/cancelled
+├── approval.py         AgentApprovalProvider: thread-safe async decision
+│                       gate (approve_all/disapprove_all/DENIED, timeout,
+│                       cancellation); decisions are snapshotted under the
+│                       lock and consumed outside it (no re-entrant deadlock)
+├── orchestrator.py     AgentOrchestrator: deterministic bounded loop +
+│                       AGENT_* event stream
+├── service.py          AgentService facade owned by the Runtime
+└── __init__.py         package surface
+```
+
+### State machine
+
+Every transition is validated; invalid transitions raise `AgentStateError`.
+
+```text
+PENDING → RUNNING → EXECUTING_TOOL → (WAITING_FOR_APPROVAL ⇄ EXECUTING_TOOL)
+   │          │                │              │
+   │          ▼                ▼              ▼
+   │      COMPLETED        FAILED          (terminal only via RUNNING)
+   └──? CANCELLED / TIMED_OUT / LIMIT_REACHED
+```
+
+Terminal states: `COMPLETED`, `FAILED`, `CANCELLED`, `TIMED_OUT`,
+`LIMIT_REACHED`. `WAITING_FOR_APPROVAL` can only transition back to
+`RUNNING`/`EXECUTING_TOOL` (after approval) or through `RUNNING` to a
+terminal state (on timeout/denial-resolve).
+
+### Loop (AgentOrchestrator)
+
+1. `AGENT_STARTED`; loop while `RUNNING` and limits allow.
+2. `AGENT_STEP_STARTED` → provider generate (provider-neutral
+   `AIRequest`; `max_steps` default applied).
+3. `AGENT_TOOL_CALL_REQUESTED` (one tool call per step, strictly
+   sequential — no parallel calls) → loop detection check →
+   `ToolService.execute` (the **only** path to a tool; the security
+   pipeline incl. approvals always runs — no internal bypass).
+4. Per-call limit checks (`max_single_tool_calls`);
+   `AGENT_TOOL_CALL_COMPLETED` or `AGENT_TOOL_CALL_FAILED`; the
+   result — including an approval denial, fed back as a failed
+   `ToolCallResult` — becomes a tool message for the next step.
+5. `AGENT_STEP_COMPLETED`; memory retrieval is injected as bounded
+   context (`_MEMORY_REFERENCE_LIMIT = 5`, silent degradation) — never
+   automatic long-term saves.
+6. `AGENT_COMPLETED` when the provider stops requesting tools; a
+   provider failure ends `FAILED`, wall-clock timeout ends `TIMED_OUT`,
+   and limit exhaustion ends `LIMIT_REACHED` with the exact reason
+   (`max_steps`/`max_tool_calls`/`max_wall_time`/`max_single_tool_calls`/
+   `max_total_tool_output`/`loop_detection`).
+
+Cancellation is cooperative: `CancellationToken.cancel()` flips the token;
+the orchestrator checks it between steps and before every tool call; a
+cancelled per-call approval gate resolves the pending tool call as
+cancelled and ends the run `CANCELLED`.
+
+### Limit hierarchy
+
+Config `agent:` block + run-time overrides vs. hard ceilings
+(`jarvis/agent/limits.py`): the smaller applicable limit wins. This is a
+runtime invariant, not a documentation convention.
+
+### Service facade (service.py)
+
+`AgentService` gates on `agent.enabled`, requires the provider registry to
+be wired, requires a provider that is owned (explicit or configured default)
+with `TOOL_CALLING` capability and `READY` state — otherwise typed errors
+(`AgentUnavailableError`, `ProviderUnavailableError`, `ProviderCapabilityError`),
+never silent fallback. It swaps in an `AgentApprovalProvider` before the run
+(restoring the previous provider after), retrieves bounded memory context,
+exposes `run(prompt, ...)`/`cancel()`/`health()`, registers the `agent`
+runtime health check (`available`/`status`/`enabled`/`detail`/`current`),
+and publishes `AGENT_*` events with exactly one terminal state per failure.
+
 ## 6. Event System
 
 All module-to-module coupling that is not a direct service call goes through
@@ -442,6 +540,23 @@ ToolRequested   ToolAllowed   ToolApprovalRequested
 ToolApproved    ToolRejected  ToolStarted  ToolCompleted  ToolFailed
 ToolDenied
 ```
+
+Phase 5A added the agent event family (published by the AgentService/
+AgentOrchestrator; payloads carry ids/reasons only — prompts are never
+published):
+
+```text
+AGENT_STARTED              AGENT_TOOL_CALL_FAILED
+AGENT_STEP_STARTED         AGENT_STEP_COMPLETED
+AGENT_TOOL_CALL_REQUESTED  AGENT_COMPLETED
+AGENT_TOOL_CALL_COMPLETED
+```
+
+Phase 4 `TOOL_*` events keep flowing for every tool execution inside an
+agent run; the exact event order for one tool call is
+`AGENT_STARTED → AGENT_STEP_STARTED → AGENT_TOOL_CALL_REQUESTED →
+AGENT_TOOL_CALL_COMPLETED → AGENT_STEP_COMPLETED → AGENT_STEP_STARTED →
+AGENT_STEP_COMPLETED (final) → AGENT_COMPLETED`.
 
 Event envelope: `{id, type, timestamp, session_id?, task_id?, source, payload}`.
 The bus must support publish/subscribe, per-type routing, and ordered

@@ -68,6 +68,15 @@ DEFAULTS: dict[str, object] = {
         "terminal": {"default_risk": "LOW_WRITE"},
         "browser": {"default_risk": "READ"},
     },
+    "agent": {
+        "enabled": True,
+        "max_steps": 12,
+        "max_tool_calls": 8,
+        "max_wall_time_seconds": 300.0,
+        "max_single_tool_calls": 3,
+        "max_total_tool_output_bytes": 2097152,
+        "loop_detection_threshold": 3,
+    },
     "security": {
         "mode": "normal",
         "default_mode": "ask",

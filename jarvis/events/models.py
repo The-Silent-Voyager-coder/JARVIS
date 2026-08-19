@@ -58,6 +58,18 @@ AI_STREAM_STARTED = "AIStreamStarted"
 AI_STREAM_COMPLETED = "AIStreamCompleted"
 AI_STREAM_FAILED = "AIStreamFailed"
 
+# Phase 5A — agent orchestration (bounded AI tool-calling loop)
+AGENT_STARTED = "AgentStarted"
+AGENT_STEP_STARTED = "AgentStepStarted"
+AGENT_TOOL_CALL_REQUESTED = "AgentToolCallRequested"
+AGENT_TOOL_CALL_COMPLETED = "AgentToolCallCompleted"
+AGENT_STEP_COMPLETED = "AgentStepCompleted"
+AGENT_COMPLETED = "AgentCompleted"
+AGENT_FAILED = "AgentFailed"
+AGENT_CANCELLED = "AgentCancelled"
+AGENT_TIMED_OUT = "AgentTimedOut"
+AGENT_LIMIT_REACHED = "AgentLimitReached"
+
 DOCUMENTED_EVENT_TYPES: frozenset[str] = frozenset(
     {
         USER_MESSAGE_RECEIVED,
@@ -101,6 +113,16 @@ DOCUMENTED_EVENT_TYPES: frozenset[str] = frozenset(
         AI_STREAM_STARTED,
         AI_STREAM_COMPLETED,
         AI_STREAM_FAILED,
+        AGENT_STARTED,
+        AGENT_STEP_STARTED,
+        AGENT_TOOL_CALL_REQUESTED,
+        AGENT_TOOL_CALL_COMPLETED,
+        AGENT_STEP_COMPLETED,
+        AGENT_COMPLETED,
+        AGENT_FAILED,
+        AGENT_CANCELLED,
+        AGENT_TIMED_OUT,
+        AGENT_LIMIT_REACHED,
     }
 )
 
