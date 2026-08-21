@@ -17,9 +17,11 @@ import json
 import logging
 import urllib.error
 import urllib.parse
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from typing import Any
 
+from jarvis.delegation.models import DelegationEvent, DelegationEventKind
 from jarvis.exceptions import ProviderError, ProviderUnavailableError
 from jarvis.intelligence import transport
 from jarvis.intelligence.models import (
@@ -72,6 +74,7 @@ class OpenCodeProvider(AIProvider):
             Capability.REMOTE,
             Capability.CANCELLATION,
             Capability.CODE_EXECUTION,
+            Capability.DELEGATION,
         }
         return ProviderCapabilities(
             capabilities=frozenset(caps),
@@ -184,7 +187,228 @@ class OpenCodeProvider(AIProvider):
             extra={"component": "intelligence", "provider": self._provider_id},
         )
 
+    # --- delegation surface (Phase 5B) --------------------------------
+
+    def create_session(self) -> str:
+        """Create a fresh OpenCode session and return its id."""
+        return self._create_session()
+
+    def send_delegation_prompt(
+        self,
+        session_id: str,
+        prompt: str,
+        working_directory: str | None = None,
+    ) -> None:
+        """Send the delegation prompt for asynchronous execution.
+
+        `working_directory` has already passed JARVIS path security in the
+        DelegationManager; it is passed along so the executor scopes its
+        work to that directory. The executor never receives an arbitrary
+        process CWD from anywhere else.
+        """
+        body: dict[str, Any] = {
+            "messages": [{"role": "user", "content": prompt}],
+            "prompt_async": True,
+        }
+        if working_directory:
+            body["working_directory"] = working_directory
+        try:
+            transport.request_json(
+                f"{self._base_url.rstrip('/')}/session/"
+                f"{urllib.parse.quote(session_id)}/prompt",
+                method="POST",
+                body=body,
+                timeout=min(self._timeout, 10.0),
+                default_timeout=10.0,
+                headers=self._auth_headers(),
+            )
+        except urllib.error.URLError as exc:
+            raise ProviderUnavailableError(f"opencode unreachable: {exc}") from exc
+        except transport.HTTPErrorStatus as exc:
+            raise ProviderError(f"opencode prompt error: {exc}") from exc
+        except ValueError as exc:
+            raise ProviderError(f"opencode malformed prompt response: {exc}") from exc
+
+    def iter_session_events(self, session_id: str) -> Iterator[DelegationEvent]:
+        """Stream normalized session events (SSE) for a delegated session.
+
+        Wire-format translation happens here and only here: raw OpenCode
+        event names/payloads are mapped to provider-neutral DelegationEvent
+        kinds. Malformed or unknown events degrade to NOTE, never crash.
+        """
+        url = (
+            f"{self._base_url.rstrip('/')}/session/"
+            f"{urllib.parse.quote(session_id)}/event"
+        )
+        try:
+            stream = transport.iter_sse(
+                url,
+                headers=self._auth_headers(),
+                timeout=self._timeout,
+                default_timeout=self._timeout,
+            )
+            for name, data in stream:
+                event = self._translate_sse(session_id, name, data)
+                if event is not None:
+                    yield event
+        except urllib.error.URLError as exc:
+            raise ProviderUnavailableError(f"opencode event stream unreachable: {exc}") from exc
+        except transport.HTTPErrorStatus as exc:
+            raise ProviderError(f"opencode event stream error: {exc}") from exc
+
+    def respond_permission(
+        self,
+        session_id: str,
+        permission_id: str,
+        approved: bool,
+        remember: bool | None = None,
+    ) -> None:
+        """Answer one permission request with the JARVIS decision."""
+        body: dict[str, Any] = {"response": approved}
+        if remember is not None:
+            body["remember"] = remember
+        try:
+            transport.request_json(
+                f"{self._base_url.rstrip('/')}/session/"
+                f"{urllib.parse.quote(session_id)}/permissions/"
+                f"{urllib.parse.quote(permission_id)}",
+                method="POST",
+                body=body,
+                timeout=min(self._timeout, 10.0),
+                default_timeout=10.0,
+                headers=self._auth_headers(),
+            )
+        except urllib.error.URLError as exc:
+            raise ProviderUnavailableError(f"opencode unreachable: {exc}") from exc
+        except transport.HTTPErrorStatus as exc:
+            raise ProviderError(f"opencode permission error: {exc}") from exc
+        except ValueError as exc:
+            raise ProviderError(f"opencode malformed permission response: {exc}") from exc
+
+    def abort_session(self, session_id: str) -> None:
+        """Abort a delegated session (best-effort; never raises)."""
+        try:
+            transport.request_json(
+                f"{self._base_url.rstrip('/')}/session/"
+                f"{urllib.parse.quote(session_id)}/abort",
+                method="POST",
+                body={},
+                timeout=min(self._timeout, 10.0),
+                default_timeout=10.0,
+                headers=self._auth_headers(),
+            )
+        except Exception as exc:  # abort is best-effort
+            log.debug("opencode session abort failed: %s", exc)
+
+    def get_session_diff(self, session_id: str) -> dict[str, Any] | None:
+        """Fetch the file-change diff of a completed session (best-effort)."""
+        try:
+            data = transport.request_json(
+                f"{self._base_url.rstrip('/')}/session/"
+                f"{urllib.parse.quote(session_id)}/diff",
+                timeout=min(self._timeout, 10.0),
+                default_timeout=10.0,
+                headers=self._auth_headers(),
+            )
+        except Exception as exc:  # diff is best-effort review material
+            log.debug("opencode session diff unavailable: %s", exc)
+            return None
+        return data if isinstance(data, dict) else None
+
+    def dispose_session(self, session_id: str) -> None:
+        """Release a delegated session (best-effort)."""
+        self._cleanup_session(session_id)
+
     # --- internals ------------------------------------------------------
+
+    def _translate_sse(
+        self, session_id: str, name: str, data: str
+    ) -> DelegationEvent | None:
+        try:
+            raw = json.loads(data) if data.strip() else {}
+        except ValueError:
+            log.debug("opencode malformed SSE event skipped: %s", name)
+            return None
+        if not isinstance(raw, dict):
+            return DelegationEvent(
+                kind=DelegationEventKind.NOTE,
+                session_id=session_id,
+                message=None,
+                metadata={"event": name[:120]},
+            )
+        inner: dict[str, Any] = {}
+        if isinstance(raw.get("properties"), dict):
+            inner = raw["properties"]
+        else:
+            inner = raw
+        lowered = name.lower()
+        if _contains_permission(inner, name):
+            return self._permission_event(session_id, name, inner)
+        if "error" in lowered or inner.get("error"):
+            return DelegationEvent(
+                kind=DelegationEventKind.FAILED,
+                session_id=session_id,
+                message=_string(inner.get("error")) or _string(inner.get("message")),
+                metadata={"event": name[:120]},
+            )
+        if "cancel" in lowered or inner.get("cancelled") is True:
+            return DelegationEvent(
+                kind=DelegationEventKind.CANCELLED,
+                session_id=session_id,
+                message=None,
+                metadata={"event": name[:120]},
+            )
+        if (
+            lowered.endswith(".completed")
+            or lowered.endswith(".done")
+            or inner.get("status") == "completed"
+            or inner.get("completed") is True
+        ):
+            return DelegationEvent(
+                kind=DelegationEventKind.COMPLETED,
+                session_id=session_id,
+                message=_string(inner.get("summary"))
+                or _string(inner.get("text"))
+                or _string(inner.get("content")),
+                metadata={"event": name[:120]},
+            )
+        text = _string(inner.get("text")) or _string(inner.get("content"))
+        return DelegationEvent(
+            kind=DelegationEventKind.PROGRESS,
+            session_id=session_id,
+            message=text[:400] if text else None,
+            metadata={"event": name[:120]},
+        )
+
+    def _permission_event(
+        self, session_id: str, name: str, inner: dict[str, Any]
+    ) -> DelegationEvent:
+        block = inner.get("key")
+        if isinstance(block, dict) and isinstance(block.get("permissions"), dict):
+            block = block["permissions"]
+        permission_id = (
+            _string(inner.get("permissionID"))
+            or _string(inner.get("permission_id"))
+            or _string(inner.get("permissionId"))
+            or name[:120]
+        )
+        path = _string(block.get("path")) if isinstance(block, dict) else None
+        action = (
+            _string(block.get("action")) if isinstance(block, dict) else None
+        ) or _string(inner.get("action")) or "unknown"
+        description = (
+            _string(block.get("description")) if isinstance(block, dict) else None
+        ) or _string(inner.get("description"))
+        return DelegationEvent(
+            kind=DelegationEventKind.PERMISSION_REQUESTED,
+            session_id=session_id,
+            message=description,
+            metadata={
+                "permission_id": permission_id,
+                "action": action,
+                "path": path or "",
+            },
+        )
 
     def _auth_headers(self) -> dict[str, str]:
         if not self._api_key_env:
@@ -330,3 +554,20 @@ def _map_finish_reason(reason: Any) -> FinishReason:
     if "error" in normalized:
         return FinishReason.ERROR
     return FinishReason.STOP
+
+
+def _contains_permission(inner: dict[str, Any], name: str) -> bool:
+    if "permission" in name.lower():
+        return True
+    if "permissionID" in inner or "permission_id" in inner or "permissionId" in inner:
+        return True
+    block = inner.get("key")
+    if isinstance(block, dict) and isinstance(block.get("permissions"), dict):
+        return True
+    return False
+
+
+def _string(value: Any) -> str | None:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None

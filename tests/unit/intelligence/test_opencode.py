@@ -377,3 +377,21 @@ def test_dispose_session_deletes(opencode: OpenCodeProvider, fake_server) -> Non
     opencode.dispose_session("sess-1")
     methods = [r["method"] for r in fake_server.requests]
     assert "DELETE" in methods
+
+
+def test_iter_session_events_http_error_wrapped(opencode: OpenCodeProvider, fake_server) -> None:
+    # A non-2xx on the event endpoint must surface as a ProviderError so the
+    # DelegationManager can treat it as connection loss — never an unhandled
+    # HTTPErrorStatus escaping to the caller.
+    fake_server.route("GET", "/session/sess-11/event", 500, {"error": "boom"})
+    opencode.init()
+    with pytest.raises(ProviderError, match="event stream"):
+        list(opencode.iter_session_events("sess-11"))
+
+
+def test_iter_session_events_unreachable_wrapped(opencode: OpenCodeProvider, fake_server) -> None:
+    # A connection failure on the event endpoint maps to ProviderUnavailableError.
+    provider = OpenCodeProvider(base_url="http://127.0.0.1:1", timeout_seconds=0.5)
+    provider.init()
+    with pytest.raises(ProviderUnavailableError, match="event stream"):
+        list(provider.iter_session_events("sess-12"))

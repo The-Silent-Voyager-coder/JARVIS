@@ -152,6 +152,23 @@ class AgentConfig:
 
 
 @dataclass(frozen=True)
+class DelegationConfig:
+    """Delegation settings (Phase 5B controlled OpenCode execution).
+
+    Limits are validated against absolute safety ceilings at load time
+    (jarvis.delegation.limits); the manager re-validates every run.
+    """
+
+    enabled: bool
+    default_provider: str
+    max_wall_time_seconds: float
+    max_output_bytes: int
+    max_permission_requests: int
+    max_session_count: int
+    max_delegation_depth: int
+
+
+@dataclass(frozen=True)
 class SecurityConfig:
     default_mode: SecurityMode
     mode: ToolSecurityMode
@@ -198,5 +215,6 @@ class JarvisConfig:
     tasks: TasksConfig
     tools: ToolsConfig
     agent: AgentConfig
+    delegation: DelegationConfig
     security: SecurityConfig
     voice: VoiceConfig

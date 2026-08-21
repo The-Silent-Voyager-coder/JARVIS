@@ -28,6 +28,7 @@ from jarvis.observability.logging import flush_logging, setup_logging
 
 if TYPE_CHECKING:
     from jarvis.agent.service import AgentService
+    from jarvis.delegation.service import DelegationService
     from jarvis.intelligence.service import IntelligenceService
     from jarvis.memory.service import MemoryService
     from jarvis.tools.service import ToolService
@@ -49,6 +50,7 @@ class Runtime:
         self._memory: MemoryService | None = None
         self._tools: ToolService | None = None
         self._agent: AgentService | None = None
+        self._delegation: DelegationService | None = None
 
     @classmethod
     def create(cls, config_path: str | None = None) -> Runtime:
@@ -114,6 +116,12 @@ class Runtime:
             raise LifecycleError("agent service not initialized")
         return self._agent
 
+    @property
+    def delegation(self) -> DelegationService:
+        if self._delegation is None:
+            raise LifecycleError("delegation service not initialized")
+        return self._delegation
+
     # --- lifecycle -----------------------------------------------------
 
     async def start(self) -> None:
@@ -178,6 +186,16 @@ class Runtime:
             agent_service.start(self._config)
             agent_service.register_health_check(health)
 
+            from jarvis.delegation.service import DelegationService
+
+            delegation_service = DelegationService(
+                intelligence=service, tools=tool_service
+            )
+            self._delegation = delegation_service
+            delegation_service.publisher = bus.publish_nowait
+            delegation_service.start(self._config)
+            delegation_service.register_health_check(health)
+
             registry.start_all()
 
             await bus.publish(
@@ -206,6 +224,8 @@ class Runtime:
             self._lifecycle.transition(RuntimeState.STOPPING)
 
         bus = self._bus
+        if self._delegation is not None:
+            self._delegation.shutdown()
         if self._agent is not None:
             self._agent.shutdown()
         if self._intelligence is not None:

@@ -119,3 +119,35 @@ class AgentTimeoutError(AgentError):
 
 class AgentUnavailableError(AgentError):
     """The agent subsystem failed to start and cannot serve requests."""
+
+
+class DelegationError(JarvisError):
+    """The delegation subsystem failed (lifecycle, limits, or transport)."""
+
+
+class DelegationValidationError(DelegationError):
+    """A delegation request did not pass validation."""
+
+
+class DelegationStateError(DelegationError):
+    """An invalid delegation state transition was attempted."""
+
+
+class DelegationLimitError(DelegationError):
+    """A delegation limit was reached (bounded execution enforced)."""
+
+    def __init__(self, message: str, *, kind: str = "limit") -> None:
+        super().__init__(message)
+        self.kind = kind
+
+
+class DelegationCancelledError(DelegationError):
+    """The delegated task was cancelled."""
+
+
+class DelegationTimeoutError(DelegationError):
+    """The delegated task exceeded its wall-clock limit."""
+
+
+class DelegationUnavailableError(DelegationError):
+    """The delegation subsystem failed to start and cannot serve requests."""

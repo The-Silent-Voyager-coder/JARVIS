@@ -17,6 +17,7 @@ from jarvis.configuration.model import (
     AgentConfig,
     AIConfig,
     CoreConfig,
+    DelegationConfig,
     EventsConfig,
     JarvisConfig,
     LocalProviderConfig,
@@ -147,6 +148,15 @@ SCHEMA: dict[str, dict[str, Field]] = {
         "max_single_tool_calls": Field("positive_int", _describe("positive_int")),
         "max_total_tool_output_bytes": Field("positive_int", _describe("positive_int")),
         "loop_detection_threshold": Field("positive_int", _describe("positive_int")),
+    },
+    "delegation": {
+        "enabled": Field("bool", _describe("bool")),
+        "default_provider": Field("nonempty_str", _describe("nonempty_str")),
+        "max_wall_time_seconds": Field("positive_number", _describe("positive_number")),
+        "max_output_bytes": Field("positive_int", _describe("positive_int")),
+        "max_permission_requests": Field("positive_int", _describe("positive_int")),
+        "max_session_count": Field("positive_int", _describe("positive_int")),
+        "max_delegation_depth": Field("positive_int", _describe("positive_int")),
     },
     "security": {
         "mode": Field(
@@ -363,8 +373,42 @@ def validate(raw: dict[str, Any]) -> list[ConfigProblem]:
                     _check_scalar("voice", f"{sub_name}.{fname}", field, entry[fname], errors)
 
     _validate_agent_ceilings(raw, errors)
+    _validate_delegation_ceilings(raw, errors)
 
     return errors
+
+
+def _validate_delegation_ceilings(
+    raw: dict[str, Any], errors: list[ConfigProblem]
+) -> None:
+    """Reject delegation limits above their absolute safety ceilings (Phase 5B)."""
+    from jarvis.delegation.limits import (
+        MAX_DELEGATION_DEPTH_CEILING,
+        MAX_OUTPUT_BYTES_CEILING,
+        MAX_PERMISSION_REQUESTS_CEILING,
+        MAX_SESSION_COUNT_CEILING,
+        MAX_WALL_TIME_SECONDS_CEILING,
+        check_bounded,
+    )
+
+    delegation = raw.get("delegation")
+    if not isinstance(delegation, dict):
+        return
+    bounded_fields = (
+        ("max_wall_time_seconds", MAX_WALL_TIME_SECONDS_CEILING),
+        ("max_output_bytes", MAX_OUTPUT_BYTES_CEILING),
+        ("max_permission_requests", MAX_PERMISSION_REQUESTS_CEILING),
+        ("max_session_count", MAX_SESSION_COUNT_CEILING),
+        ("max_delegation_depth", MAX_DELEGATION_DEPTH_CEILING),
+    )
+    for name, ceiling in bounded_fields:
+        value = delegation.get(name)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue  # type errors are already reported by the schema pass
+        try:
+            check_bounded(f"delegation.{name}", value, ceiling)
+        except ValueError as exc:
+            errors.append(ConfigProblem("delegation", name, value, str(exc)))
 
 
 def _validate_agent_ceilings(raw: dict[str, Any], errors: list[ConfigProblem]) -> None:
@@ -616,6 +660,16 @@ def build_config(raw: dict[str, Any]) -> JarvisConfig:
         loop_detection_threshold=int(raw["agent"]["loop_detection_threshold"]),
     )
 
+    delegation = DelegationConfig(
+        enabled=bool(raw["delegation"]["enabled"]),
+        default_provider=str(raw["delegation"]["default_provider"]),
+        max_wall_time_seconds=float(raw["delegation"]["max_wall_time_seconds"]),
+        max_output_bytes=int(raw["delegation"]["max_output_bytes"]),
+        max_permission_requests=int(raw["delegation"]["max_permission_requests"]),
+        max_session_count=int(raw["delegation"]["max_session_count"]),
+        max_delegation_depth=int(raw["delegation"]["max_delegation_depth"]),
+    )
+
     security = SecurityConfig(
         default_mode=SecurityMode(str(raw["security"]["default_mode"])),
         mode=ToolSecurityMode(str(raw["security"]["mode"])),
@@ -649,6 +703,7 @@ def build_config(raw: dict[str, Any]) -> JarvisConfig:
         tasks=tasks,
         tools=tools,
         agent=agent,
+        delegation=delegation,
         security=security,
         voice=voice,
     )

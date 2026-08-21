@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+import urllib.error
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,7 @@ from jarvis.delegation.models import (
 )
 from jarvis.events.models import (
     DELEGATION_COMPLETED,
+    DELEGATION_FAILED,
     DELEGATION_PERMISSION_REQUESTED,
     DELEGATION_PERMISSION_RESOLVED,
     DELEGATION_REQUESTED,
@@ -701,3 +703,78 @@ def test_missing_provider_rejected(tmp_path: Path) -> None:
     )
     with pytest.raises(DelegationValidationError, match="not registered"):
         manager.delegate(request)
+
+
+class DroppingStreamProvider(FakeDelegationProvider):
+    """The event stream keeps ending without a terminal event (connection loss)."""
+
+    def iter_session_events(self, session_id: str) -> Iterator[DelegationEvent]:
+        self._reads += 1
+        return iter([])
+
+
+def test_connection_loss_empty_stream_fails_after_bounded_reconnects(
+    tmp_path: Path,
+) -> None:
+    provider = DroppingStreamProvider()
+    recorder = Recorder()
+    manager, _ = make_manager(tmp_path, provider, publisher=recorder)
+    result = manager.delegate(
+        DelegationRequest(prompt="fix", working_directory=approved_wd(tmp_path))
+    )
+    assert result.state is DelegationState.FAILED
+    assert result.reason == "event_connection_lost"
+    # Bounded: the manager must stop reconnecting after the limit, not loop forever.
+    assert provider._reads <= 1 + 3
+    assert provider.disposed == ["sess-fake-1"]
+    # The failure surfaces as an audit event for the security bus.
+    types = [event.type for event in recorder.events]
+    assert DELEGATION_FAILED in types
+    failed = next(event for event in recorder.events if event.type == DELEGATION_FAILED)
+    assert failed.payload["reason"] == "event_connection_lost"
+
+
+class ErroringStreamProvider(FakeDelegationProvider):
+    """The event stream raises a transport error on every read (connection loss)."""
+
+    def iter_session_events(self, session_id: str) -> Iterator[DelegationEvent]:
+        self._reads += 1
+        raise urllib.error.URLError("stream lost")
+
+
+def test_connection_loss_transport_error_fails_after_bounded_reconnects(
+    tmp_path: Path,
+) -> None:
+    provider = ErroringStreamProvider()
+    manager, _ = make_manager(tmp_path, provider)
+    result = manager.delegate(
+        DelegationRequest(prompt="fix", working_directory=approved_wd(tmp_path))
+    )
+    assert result.state is DelegationState.FAILED
+    assert result.reason == "event_connection_lost"
+    assert provider.aborted == ["sess-fake-1"]
+    assert provider.disposed == ["sess-fake-1"]
+
+
+def test_reconnect_recovers_after_transient_failure(tmp_path: Path) -> None:
+    # One failed read, then a healthy stream with a terminal event.
+    provider = FakeDelegationProvider(
+        events=[DelegationEvent(kind=DelegationEventKind.COMPLETED, message="x")]
+    )
+    calls = 0
+    original = provider.iter_session_events
+
+    def flaky_iter(session_id: str):  # type: ignore[no-untyped-def]
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise urllib.error.URLError("transient")
+        return original(session_id)
+
+    provider.iter_session_events = flaky_iter  # type: ignore[method-assign]
+    manager, _ = make_manager(tmp_path, provider)
+    result = manager.delegate(
+        DelegationRequest(prompt="fix", working_directory=approved_wd(tmp_path))
+    )
+    assert result.state is DelegationState.COMPLETED
+    assert calls >= 2

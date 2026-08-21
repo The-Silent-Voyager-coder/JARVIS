@@ -382,3 +382,107 @@ def test_memory_list_json(valid_config_yaml: Path, capsys: pytest.CaptureFixture
     assert '"total": 2' in out
     assert '"items"' in out
     assert "content" not in out  # hidden in JSON without --content
+
+
+# --- delegation ---------------------------------------------------------
+
+
+def _delegation_cli_config(tmp_path: Path) -> Path:
+    d = str(tmp_path).replace("\\", "/")
+    path = tmp_path / "delegation-config.yaml"
+    path.write_text(
+        f"""
+core:
+  name: "delegation cli test"
+  data_dir: "{d}/data"
+  cache_dir: "{d}/cache"
+  logs_dir: "{d}/logs"
+  runtime_dir: "{d}/runtime"
+  workspaces_dir: "{d}/workspaces"
+  models_dir: "{d}/models"
+  backups_dir: "{d}/backups"
+  timezone: "UTC"
+logging:
+  level: "INFO"
+  retention_days: 1
+memory:
+  enabled: false
+  database_path: "{d}/data/memory.db"
+  auto_save_conversations: false
+  default_confidence: 0.8
+  retention_days: 365
+tools:
+  working_directory: "{d}/workspace"
+  allowed_roots: ["{d}"]
+  denied_roots: []
+  terminal:
+    default_risk: "SYSTEM"
+  browser:
+    default_risk: "FORBIDDEN"
+delegation:
+  enabled: false
+  default_provider: "opencode"
+  max_wall_time_seconds: 1800.0
+  max_output_bytes: 4194304
+  max_permission_requests: 50
+  max_session_count: 3
+  max_delegation_depth: 1
+""",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_delegation_health_disabled_reports_unavailable(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(["delegation", "health", "--config", str(_delegation_cli_config(tmp_path))])
+    assert code == EXIT_FAILURE  # disabled by config -> available False
+    out = capsys.readouterr().out
+    assert "J.A.R.V.I.S. Delegation Health" in out
+    assert "status          disabled" in out
+    assert "available       False" in out
+    assert "enabled         False" in out
+
+
+def test_delegation_health_disabled_json(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(
+        [
+            "delegation", "health", "--json",
+            "--config", str(_delegation_cli_config(tmp_path)),
+        ]
+    )
+    assert code == EXIT_FAILURE
+    out = capsys.readouterr().out
+    assert '"status": "disabled"' in out
+    assert '"available": false' in out
+
+
+def test_delegation_list_when_unavailable_returns_failure(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(["delegation", "list", "--config", str(_delegation_cli_config(tmp_path))])
+    assert code == EXIT_FAILURE
+    assert "delegation subsystem" in capsys.readouterr().err
+
+
+def test_delegation_get_when_unavailable_returns_failure(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(
+        ["delegation", "get", "task-1", "--config", str(_delegation_cli_config(tmp_path))]
+    )
+    assert code == EXIT_FAILURE
+    assert "delegation subsystem" in capsys.readouterr().err
+
+
+def test_delegation_cancel_when_unavailable_returns_failure(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(
+        ["delegation", "cancel", "task-1", "--config", str(_delegation_cli_config(tmp_path))]
+    )
+    assert code == EXIT_FAILURE
+    assert "delegation subsystem" in capsys.readouterr().err

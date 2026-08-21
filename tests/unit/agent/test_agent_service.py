@@ -13,13 +13,24 @@ from jarvis.agent.models import AgentState
 from jarvis.agent.service import AgentService
 from jarvis.configuration.loader import load_config
 from jarvis.core.health import HealthRegistry, HealthStatus
+from jarvis.delegation.models import (
+    DelegationEvent,
+    DelegationEventKind,
+    DelegationRequest,
+    DelegationState,
+)
 from jarvis.exceptions import (
     AgentUnavailableError,
     AgentValidationError,
+    DelegationUnavailableError,
     ProviderCapabilityError,
     ProviderUnavailableError,
 )
-from jarvis.intelligence.provider import ProviderState
+from jarvis.intelligence.provider import (
+    Capability,
+    ProviderCapabilities,
+    ProviderState,
+)
 from jarvis.tools.approval import DeterministicApprovalProvider
 from jarvis.tools.models import ApprovalOutcome
 from tests.unit.agent._fakes import (
@@ -384,3 +395,167 @@ def test_shutdown_clears_state(tmp_path: Path) -> None:
     service.shutdown()
     with pytest.raises(AgentUnavailableError):
         service.run("again")
+
+
+class FakeDelegationProvider(FakeProvider):
+    """Delegation-capable provider for the AgentService.delegate path."""
+
+    def __init__(
+        self,
+        provider_id: str = "delegate-fake",
+        *,
+        state: ProviderState = ProviderState.READY,
+    ) -> None:
+        caps = {
+            Capability.TEXT_GENERATION,
+            Capability.DELEGATION,
+        }
+        self._capabilities = ProviderCapabilities(capabilities=frozenset(caps))
+        self._state = state
+        self._provider_id = provider_id
+        self.created: list[str] = []
+        self.disposed: list[str] = []
+        self.prompted: list[tuple[str, str, str | None]] = []
+
+    def create_session(self) -> str:
+        session_id = "sess-agent-delegated"
+        self.created.append(session_id)
+        return session_id
+
+    def send_delegation_prompt(
+        self, session_id: str, prompt: str, working_directory: str | None = None
+    ) -> None:
+        self.prompted.append((session_id, prompt, working_directory))
+
+    def iter_session_events(self, session_id: str):  # type: ignore[no-untyped-def]
+        yield DelegationEvent(kind=DelegationEventKind.COMPLETED, message="done")
+
+    def respond_permission(
+        self, session_id: str, permission_id: str, approved: bool, remember: bool | None = None
+    ) -> None:
+        pass
+
+    def abort_session(self, session_id: str) -> None:
+        pass
+
+    def get_session_diff(self, session_id: str):  # type: ignore[no-untyped-def]
+        return None
+
+    def dispose_session(self, session_id: str) -> None:
+        self.disposed.append(session_id)
+
+
+class _DelegationEvent:
+    def __init__(self, kind: str, message: str) -> None:
+        self.kind = kind
+        self.message = message
+        self.metadata = {}
+
+
+def _delegation_config(tmp_path: Path) -> object:
+    path = tmp_path / "jarvis-delegation.yaml"
+    d = str(tmp_path).replace("\\", "/")
+    path.write_text(
+        f"""
+core:
+  name: "J.A.R.V.I.S. Agent Delegate Test"
+  data_dir: "{d}/data"
+  cache_dir: "{d}/cache"
+  logs_dir: "{d}/logs"
+  runtime_dir: "{d}/runtime"
+  workspaces_dir: "{d}/workspaces"
+  models_dir: "{d}/models"
+  backups_dir: "{d}/backups"
+  timezone: "UTC"
+logging:
+  level: "DEBUG"
+  retention_days: 7
+memory:
+  enabled: false
+  database_path: "{d}/data/memory.db"
+  auto_save_conversations: false
+  default_confidence: 0.8
+  retention_days: 365
+tools:
+  working_directory: "{d}/workspace"
+  allowed_roots: ["{d}"]
+  denied_roots: []
+  terminal:
+    default_risk: "SYSTEM"
+  browser:
+    default_risk: "FORBIDDEN"
+delegation:
+  enabled: true
+  default_provider: "delegate-fake"
+  max_wall_time_seconds: 30.0
+  max_output_bytes: 10000
+  max_permission_requests: 50
+  max_session_count: 3
+  max_delegation_depth: 1
+""",
+        encoding="utf-8",
+    )
+    return load_config(path, environ={}).config
+
+
+def _delegate_service(tmp_path: Path) -> AgentService:
+    registry = FakeProviderRegistry({"delegate-fake": FakeDelegationProvider()})
+    service = AgentService(
+        intelligence=FakeIntelligenceService(registry),
+        tools=FakeTools(),
+    )
+    service.start(_delegation_config(tmp_path))
+    return service
+
+
+def test_delegate_unavailable_without_intelligence() -> None:
+    service = AgentService()
+    request = DelegationRequest(
+        prompt="fix", working_directory=Path("C:/tmp/workspace")
+    )
+    with pytest.raises(DelegationUnavailableError, match="intelligence"):
+        service.delegate(request)
+
+
+def test_delegate_rejects_depth_above_zero(tmp_path: Path) -> None:
+    service = _delegate_service(tmp_path)
+    request = DelegationRequest(
+        prompt="fix",
+        working_directory=tmp_path / "workspace",
+        depth=1,
+    )
+    with pytest.raises(AgentValidationError, match="depth-0"):
+        service.delegate(request)
+
+
+def test_delegate_rejects_provider_without_capability(tmp_path: Path) -> None:
+    registry = FakeProviderRegistry({"local": FakeProvider("local")})
+    service = AgentService(
+        intelligence=FakeIntelligenceService(registry),
+        tools=FakeTools(),
+    )
+    service.start(_delegation_config(tmp_path))
+    request = DelegationRequest(
+        prompt="fix",
+        working_directory=tmp_path / "workspace",
+        provider="local",
+    )
+    with pytest.raises(ProviderCapabilityError, match="no silent fallback"):
+        service.delegate(request)
+
+
+def test_delegate_happy_path(tmp_path: Path) -> None:
+    service = _delegate_service(tmp_path)
+    result = service.delegate(
+        DelegationRequest(prompt="fix", working_directory=tmp_path / "workspace")
+    )
+    assert result.state is DelegationState.COMPLETED
+    assert result.provider == "delegate-fake"
+
+
+def test_delegate_unavailable_before_start(tmp_path: Path) -> None:
+    service = AgentService()
+    with pytest.raises(DelegationUnavailableError, match="intelligence"):
+        service.delegate(
+            DelegationRequest(prompt="fix", working_directory=tmp_path / "workspace")
+        )

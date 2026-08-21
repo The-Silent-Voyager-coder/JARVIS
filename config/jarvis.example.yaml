@@ -85,6 +85,25 @@ agent:
   # Consecutive identical tool calls (same tool + arguments) that end a run.
   loop_detection_threshold: 3
 
+delegation:
+  # Controlled OpenCode execution under JARVIS authority (Phase 5B).
+  # JARVIS validates, secures, permissions, monitors, and cancels; the
+  # executor only codes. All limits are validated against absolute safety
+  # ceilings at load time and are never unlimited.
+  enabled: false
+  # Registered provider that must expose the delegation capability.
+  default_provider: "opencode"
+  # Wall-clock budget per delegated task (seconds).
+  max_wall_time_seconds: 1800
+  # Maximum accumulated executor output bytes per task.
+  max_output_bytes: 4194304
+  # Maximum executor permission requests per task (0 would mean none).
+  max_permission_requests: 50
+  # Maximum concurrently running delegated sessions.
+  max_session_count: 3
+  # Maximum delegation depth; 1 means no recursive delegation.
+  max_delegation_depth: 1
+
 security:
   # Tool-system security mode: lockdown | normal | development
   # lockdown: SAFE tools only. normal: SAFE/LOW auto, MEDIUM/HIGH ask.

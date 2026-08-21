@@ -21,6 +21,10 @@ Commands:
     jarvis agent health [--config PATH]        agent subsystem health
     jarvis agent run --prompt "…" [--config PATH]  run a bounded agent task
             through the same security pipeline (max steps, approvals, limits)
+    jarvis delegation health [--config PATH]   delegation subsystem health
+    jarvis delegation list [--config PATH]     running tasks then recent results
+    jarvis delegation get <task_id> [--config PATH]  snapshot of one task
+    jarvis delegation cancel <task_id> [--config PATH]  cancel a running task
 
 Exit codes: 0 success, 1 general failure, 2 invalid configuration/input.
 Memory content is never printed unless --content is passed.
@@ -45,6 +49,8 @@ from jarvis.exceptions import (
     AgentUnavailableError,
     AgentValidationError,
     ConfigurationError,
+    DelegationUnavailableError,
+    DelegationValidationError,
     JarvisError,
     MemoryError,
     MemoryNotFoundError,
@@ -75,6 +81,7 @@ COMPONENT_LABELS: dict[str, str] = {
     "memory": "Memory",
     "tools": "Tools",
     "agent": "Agent",
+    "delegation": "Delegation",
 }
 
 
@@ -249,6 +256,58 @@ def _build_parser() -> argparse.ArgumentParser:
     agent_run.add_argument("--model", default=None, help="model name override")
     agent_run.add_argument(
         "--max-steps", type=int, default=None, help="override the step limit (bounded)"
+    )
+
+    delegation_parser = subparsers.add_parser("delegation", help="delegation commands")
+    delegation_sub = delegation_parser.add_subparsers(
+        dest="delegation_command", metavar="SUBCOMMAND"
+    )
+
+    delegation_health = delegation_sub.add_parser(
+        "health", help="report delegation subsystem health"
+    )
+    delegation_health.add_argument(
+        "--config", metavar="PATH", default=None, help="configuration file to use"
+    )
+    delegation_health.add_argument(
+        "--json", action="store_true", help="machine-readable output"
+    )
+
+    delegation_list = delegation_sub.add_parser(
+        "list", help="running tasks then recent results"
+    )
+    delegation_list.add_argument(
+        "--config", metavar="PATH", default=None, help="configuration file to use"
+    )
+    delegation_list.add_argument(
+        "--json", action="store_true", help="machine-readable output"
+    )
+    delegation_list.add_argument(
+        "--limit", type=int, default=50, help="maximum entries (default: 50)"
+    )
+
+    delegation_get = delegation_sub.add_parser(
+        "get", help="snapshot of one delegation task"
+    )
+    delegation_get.add_argument("task_id", metavar="TASK_ID", help="delegation task id")
+    delegation_get.add_argument(
+        "--config", metavar="PATH", default=None, help="configuration file to use"
+    )
+    delegation_get.add_argument(
+        "--json", action="store_true", help="machine-readable output"
+    )
+
+    delegation_cancel = delegation_sub.add_parser(
+        "cancel", help="cancel a running delegation (best-effort)"
+    )
+    delegation_cancel.add_argument(
+        "task_id", metavar="TASK_ID", help="delegation task id"
+    )
+    delegation_cancel.add_argument(
+        "--config", metavar="PATH", default=None, help="configuration file to use"
+    )
+    delegation_cancel.add_argument(
+        "--json", action="store_true", help="machine-readable output"
     )
 
     return parser
@@ -869,6 +928,133 @@ def _runtime_from_args(args: argparse.Namespace) -> Runtime:
     return runtime
 
 
+# --- delegation -----------------------------------------------------------
+
+
+def _cmd_delegation_health(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        data = runtime.delegation.health()
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK if data.get("available", False) else EXIT_FAILURE
+    print("J.A.R.V.I.S. Delegation Health")
+    print(f"  status          {data.get('status', 'unknown')}")
+    print(f"  available       {data.get('available', False)}")
+    print(f"  enabled         {data.get('enabled', '-')}")
+    print(f"  detail          {data.get('detail') or ''}")
+    if "default_provider" in data:
+        print(f"  provider        {data['default_provider']}")
+        print(f"  provider_state  {data.get('provider_state') or '-'}")
+        print(f"  provider_ready  {data.get('provider_ready', False)}")
+    if "active_tasks" in data:
+        print(f"  active_tasks    {data['active_tasks']}")
+    limits = data.get("limits")
+    if limits:
+        print("  limits")
+        for name, value in limits.items():
+            print(f"    {name:<28} {value}")
+    return EXIT_OK if data.get("available", False) else EXIT_FAILURE
+
+
+def _cmd_delegation_list(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            tasks = runtime.delegation.list_tasks(args.limit)
+        except DelegationUnavailableError as exc:
+            print(f"jarvis delegation list: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(tasks, indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Delegation Tasks")
+    if not tasks:
+        print("  (no tasks)")
+    for task in tasks:
+        print(f"  {task.get('task_id', '-'):<40} "
+              f"{task.get('state', 'unknown'):<12} "
+              f"{task.get('provider', '-'):<12} "
+              f"elapsed_ms={task.get('elapsed_ms', 0):.0f}")
+        if task.get("reason"):
+            print(f"    reason: {task['reason']}")
+        if task.get("error"):
+            print(f"    error: {task['error']}")
+    return EXIT_OK
+
+
+def _cmd_delegation_get(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            data = runtime.delegation.get(args.task_id)
+        except DelegationValidationError as exc:
+            print(f"jarvis delegation get: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+        except DelegationUnavailableError as exc:
+            print(f"jarvis delegation get: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Delegation Task")
+    for name, value in data.items():
+        if name == "diff" and value:
+            print(f"  {name}")
+            for line in value.splitlines()[:40]:
+                print(f"    {line}")
+            if len(value.splitlines()) > 40:
+                print(f"    … ({len(value.splitlines()) - 40} more lines)")
+        else:
+            print(f"  {name:<24} {value}")
+    return EXIT_OK
+
+
+def _cmd_delegation_cancel(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            data = runtime.delegation.cancel(args.task_id)
+        except DelegationValidationError as exc:
+            print(f"jarvis delegation cancel: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+        except DelegationUnavailableError as exc:
+            print(f"jarvis delegation cancel: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Delegation Cancel")
+    print(f"  task_id    {data.get('task_id', '-')}")
+    print(f"  state      {data.get('state', 'unknown')}")
+    print(f"  cancelling {data.get('cancelling', False)}")
+    return EXIT_OK
+
+
 def _cmd_health(args: argparse.Namespace) -> int:
     try:
         runtime = Runtime.create(args.config)
@@ -948,6 +1134,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.agent_command == "run":
             return _cmd_agent_run(args)
         parser.error("agent requires a subcommand: health, run")
+    if args.command == "delegation":
+        if args.delegation_command == "health":
+            return _cmd_delegation_health(args)
+        if args.delegation_command == "list":
+            return _cmd_delegation_list(args)
+        if args.delegation_command == "get":
+            return _cmd_delegation_get(args)
+        if args.delegation_command == "cancel":
+            return _cmd_delegation_cancel(args)
+        parser.error("delegation requires a subcommand: health, list, get, cancel")
 
     parser.print_help()
     return EXIT_OK

@@ -77,6 +77,15 @@ DEFAULTS: dict[str, object] = {
         "max_total_tool_output_bytes": 2097152,
         "loop_detection_threshold": 3,
     },
+    "delegation": {
+        "enabled": False,
+        "default_provider": "opencode",
+        "max_wall_time_seconds": 1800.0,
+        "max_output_bytes": 4194304,
+        "max_permission_requests": 50,
+        "max_session_count": 3,
+        "max_delegation_depth": 1,
+    },
     "security": {
         "mode": "normal",
         "default_mode": "ask",

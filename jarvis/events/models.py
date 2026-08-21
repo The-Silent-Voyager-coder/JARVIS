@@ -70,6 +70,17 @@ AGENT_CANCELLED = "AgentCancelled"
 AGENT_TIMED_OUT = "AgentTimedOut"
 AGENT_LIMIT_REACHED = "AgentLimitReached"
 
+# Phase 5B — delegation (controlled OpenCode execution under JARVIS authority)
+DELEGATION_REQUESTED = "DelegationRequested"
+DELEGATION_STARTED = "DelegationStarted"
+DELEGATION_PROGRESS = "DelegationProgress"
+DELEGATION_PERMISSION_REQUESTED = "DelegationPermissionRequested"
+DELEGATION_PERMISSION_RESOLVED = "DelegationPermissionResolved"
+DELEGATION_COMPLETED = "DelegationCompleted"
+DELEGATION_FAILED = "DelegationFailed"
+DELEGATION_CANCELLED = "DelegationCancelled"
+DELEGATION_TIMED_OUT = "DelegationTimedOut"
+
 DOCUMENTED_EVENT_TYPES: frozenset[str] = frozenset(
     {
         USER_MESSAGE_RECEIVED,
@@ -123,6 +134,15 @@ DOCUMENTED_EVENT_TYPES: frozenset[str] = frozenset(
         AGENT_CANCELLED,
         AGENT_TIMED_OUT,
         AGENT_LIMIT_REACHED,
+        DELEGATION_REQUESTED,
+        DELEGATION_STARTED,
+        DELEGATION_PROGRESS,
+        DELEGATION_PERMISSION_REQUESTED,
+        DELEGATION_PERMISSION_RESOLVED,
+        DELEGATION_COMPLETED,
+        DELEGATION_FAILED,
+        DELEGATION_CANCELLED,
+        DELEGATION_TIMED_OUT,
     }
 )
 

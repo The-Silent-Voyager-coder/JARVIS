@@ -28,6 +28,7 @@ from jarvis.core.health import HealthRegistry, HealthStatus
 from jarvis.exceptions import (
     AgentUnavailableError,
     AgentValidationError,
+    DelegationUnavailableError,
     ProviderCapabilityError,
     ProviderUnavailableError,
 )
@@ -35,6 +36,7 @@ from jarvis.intelligence.models import Message
 from jarvis.intelligence.provider import Capability, ProviderState
 
 if TYPE_CHECKING:
+    from jarvis.delegation.models import DelegationRequest, DelegationResult
     from jarvis.intelligence.service import IntelligenceService
     from jarvis.memory.service import MemoryService
     from jarvis.tools.service import ToolService
@@ -171,6 +173,56 @@ class AgentService:
                 self._intelligence.cancel(status.request_id)
             except Exception as exc:
                 log.debug("agent cancel failed: %s", exc)
+
+    def delegate(self, request: DelegationRequest) -> DelegationResult:
+        """Delegate a coding task to an executor under JARVIS authority.
+
+        Explicit path only — the agent never fabricates delegation from
+        keywords. A depth-0 request is issued against the delegation manager,
+        which enforces limits, permissions, path security, and cancellation.
+        """
+        from jarvis.delegation.manager import DelegationManager
+
+        registry = self._require_delegation_registry()
+        self._require_delegation_capability(request.provider)
+        if self._config is None:
+            raise DelegationUnavailableError("delegation requires a configured runtime")
+        manager = DelegationManager(
+            config=self._config,
+            registry=registry,
+            publisher=self.publisher,
+        )
+        if self._tools is not None:
+            manager.approval = self._tools.approval
+        if request.depth > 0:
+            raise AgentValidationError(
+                "agent may only start depth-0 delegations; recursive "
+                "delegation is controlled by the delegation manager"
+            )
+        return manager.delegate(request)
+
+    def _require_delegation_registry(self) -> Any:
+        if self._intelligence is None:
+            raise DelegationUnavailableError("delegation requires a wired intelligence service")
+        return self._intelligence.registry
+
+    def _require_delegation_capability(self, provider_id: str | None) -> None:
+        registry = self._intelligence.registry if self._intelligence is not None else None
+        selected = provider_id or (self._config.delegation.default_provider
+                                   if self._config is not None else None)
+        if registry is None or selected is None:
+            raise DelegationUnavailableError("delegation is not configured")
+        if not registry.has(selected):
+            raise ProviderUnavailableError(
+                f"delegation provider {selected!r} is not registered "
+                f"(available: {', '.join(registry.ids()) or 'none'})"
+            )
+        provider = registry.get(selected)
+        if not provider.capabilities().supports(Capability.DELEGATION):
+            raise ProviderCapabilityError(
+                f"provider {selected!r} does not support delegation; "
+                "no silent fallback to a non-delegating provider"
+            )
 
     # --- health --------------------------------------------------------
 

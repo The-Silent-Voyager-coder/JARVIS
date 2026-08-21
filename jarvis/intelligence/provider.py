@@ -30,6 +30,7 @@ class Capability(StrEnum):
     LOCAL = "local"
     REMOTE = "remote"
     CODE_EXECUTION = "code_execution"
+    DELEGATION = "delegation"
 
 
 @dataclass(frozen=True)
