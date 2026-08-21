@@ -11,10 +11,10 @@ long-running objectives, and recover from failures.
 
 | | |
 |---|---|
-| Platform | Windows 11 (ASUS Gaming V16, RTX 4050 6 GB VRAM, 16 GB RAM) |
+| Platform | Windows 11 |
 | Cost | ₹0 / $0 — no paid APIs, no paid hosting, no paid cloud |
 | Language | Python 3.11+ |
-| Status | **Phase 5A — Bounded agent tool loop** (AI proposes, security decides) |
+| Status | **Phase 5B — Controlled OpenCode delegation** (JARVIS is authority, OpenCode is delegated executor) |
 
 ---
 
@@ -81,8 +81,19 @@ Phase 5A adds the bounded, auditable AI↔tool loop on top of all four layers:
   regression), offline CLI integration suite, scripted mock-provider
   tool-call tests; ruff + mypy clean
 
-**Not yet implemented**: OpenCode delegation inside the agent loop, voice,
-vision, unattended autonomy, HUD, and semantic-memory ingestion.
+**Not yet implemented**: Voice, vision, unattended autonomy, HUD, and semantic-memory ingestion — OpenCode delegation is now implemented (Phase 5B).
+
+## Current Status (Phase 5B)
+
+Phase 5B adds controlled OpenCode delegation under full JARVIS authority:
+
+- **JARVIS is authority, OpenCode is executor**: `USER → JARVIS → AgentOrchestrator → DelegationManager → JARVIS SecurityPolicy → OpenCode Provider → OpenCode Server → SSE → JARVIS events`. OpenCode never bypasses the security layer.
+- **Provider-neutral delegation**: `DelegationManager` talks only to a `DelegationProvider` protocol (`Capability.DELEGATION`); OpenCode-specific wire formats stay in `jarvis/intelligence/opencode.py`.
+- **Secure permission routing**: every executor permission (`read`/`edit`/`write`/`bash`/`webfetch`/`websearch`/`task`/`skill`…) is mapped to a JARVIS `ToolCategory`/`ToolRisk`; unknown actions default to `HIGH`/`SYSTEM` and are `ASK`-gated; `ALLOW` auto-approves only `SAFE`/`LOW` inside allowed roots, `DENY` blocks `CRITICAL`/forbidden commands and protected paths.
+- **Hard-bounded execution**: `max_wall_time_seconds` (1800s default, 7200s ceiling), `max_output_bytes` (4 MiB/32 MiB), `max_permission_requests` (50/200), `max_session_count` (3/10), `max_delegation_depth` (1 — no recursion), `SSE_RECONNECT_LIMIT` (3) — validated at config load and re-validated per run.
+- **Full lifecycle**: `DelegationState` (`created → starting → running ⇄ waiting_for_permission → completing → completed/failed/cancelled/timed_out`), bounded SSE with malformed-event tolerance, timeout/cancellation/diff retrieval, session cleanup, and `DELEGATION_*` + `TOOL_*` audit events (no prompts, no secrets).
+- **CLI**: `jarvis delegation health|list|get <task_id>|cancel <task_id> [--json]` (same auth path as `jarvis agent`/`tools`).
+- **Tests**: 732 passing (55 delegation, 32 OpenCode), `ruff`/`mypy` clean.
 
 ## Development Phases
 
@@ -94,7 +105,8 @@ vision, unattended autonomy, HUD, and semantic-memory ingestion.
 | 3 | Memory (SQLite, provenance) | **Done** |
 | 4 | Tools (files, terminal, processes, system) | **Done** |
 | 5A | Agent loop (bounded AI↔tool, limits, approval, cancellation) | **Done** |
-| 5 | OpenCode integration | Not started |
+| 5B | Controlled OpenCode delegation (DelegationManager, secure permission routing, bounded SSE) | **Done** |
+| 5 | OpenCode integration | **Done** (delivered via 5B delegation layer) |
 | 6 | Voice (wake word, STT, TTS) | Not started |
 | 7 | Autonomy (planner, task graph, verification) | Not started |
 | 8 | Vision | Not started |
@@ -116,6 +128,7 @@ jarvis/
 │   ├── memory/          → memory models, SQLite persistence, retrieval (Phase 3)
 │   ├── tools/           → tool registry, security policy, built-in tools (Phase 4)
 │   ├── agent/           → bounded tool loop, limits, approval, events (Phase 5A)
+│   ├── delegation/      → controlled OpenCode delegation, limits, manager, service (Phase 5B)
 │   └── ...              → voice, autonomy (later phases)
 ├── tests/           → test suite (per-module subdirectories)
 ├── .env.example     → secret template (real secrets never committed)
@@ -165,6 +178,13 @@ python -m venv .venv
 .\.venv\Scripts\jarvis.exe agent run --prompt "check the system" --json
 # runs are always bounded: step/tool-call/wall-clock limits with ceilings
 
+# inspect and drive controlled delegation (needs OpenCode server at 127.0.0.1:4096)
+.\.venv\Scripts\jarvis.exe delegation health
+.\.venv\Scripts\jarvis.exe delegation list
+.\.venv\Scripts\jarvis.exe delegation get <task_id>
+.\.venv\Scripts\jarvis.exe delegation cancel <task_id>
+# delegation is provider-neutral, bounded, and always via JARVIS SecurityPolicy
+
 # run the test suite, linter, and type checker
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -m ruff check .
@@ -204,5 +224,5 @@ Memory content is shown only with `--content`; every command supports
 - Vision (Phase 8)
 - Unattended multi-agent orchestration (Phase 7; the Phase 5A loop is
   single-run and user-initiated)
-- Unbounded autonomy or OpenCode delegation inside the agent loop
+- Unbounded autonomy (delegation is bounded: depth 1, 30 min wall-clock, 4 MiB output, 50 permissions, 3 sessions)
 - Any paid service integration

@@ -30,9 +30,29 @@ backups/
 models/
 !models/.gitkeep
 
+# --- Databases (never public) ---
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+
+# --- Crypto material ---
+*.p12
+*.pfx
+
+# --- Local configuration (real config, not example) ---
+config/jarvis.yaml
+config/*.local.yaml
+
 # --- Local workspaces (may contain large projects) ---
 workspaces/
 !workspaces/.gitkeep
+
+# --- Coverage / logs ---
+.coverage.*
+coverage.xml
+*.log
 
 # --- Editors / OS ---
 .idea/

@@ -8,7 +8,7 @@ version = "0.3.0"
 description = "Just A Rather Very Intelligent System — a modular, local-first personal AI operating system"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Proprietary" }
+license = { file = "LICENSE" }
 keywords = ["assistant", "ai", "local-first", "automation"]
 classifiers = [
     "Programming Language :: Python :: 3",
