@@ -31,7 +31,10 @@ if TYPE_CHECKING:
     from jarvis.delegation.service import DelegationService
     from jarvis.intelligence.service import IntelligenceService
     from jarvis.memory.service import MemoryService
+    from jarvis.planning.service import PlanningService
+    from jarvis.task.service import TaskService
     from jarvis.tools.service import ToolService
+    from jarvis.workspace.service import WorkspaceService
 
 log = logging.getLogger("jarvis.core.runtime")
 
@@ -51,6 +54,9 @@ class Runtime:
         self._tools: ToolService | None = None
         self._agent: AgentService | None = None
         self._delegation: DelegationService | None = None
+        self._workspace: WorkspaceService | None = None
+        self._planning: PlanningService | None = None
+        self._task: TaskService | None = None
 
     @classmethod
     def create(cls, config_path: str | None = None) -> Runtime:
@@ -121,6 +127,24 @@ class Runtime:
         if self._delegation is None:
             raise LifecycleError("delegation service not initialized")
         return self._delegation
+
+    @property
+    def workspace(self) -> WorkspaceService:
+        if self._workspace is None:
+            raise LifecycleError("workspace service not initialized")
+        return self._workspace
+
+    @property
+    def planning(self) -> PlanningService:
+        if self._planning is None:
+            raise LifecycleError("planning service not initialized")
+        return self._planning
+
+    @property
+    def task(self) -> TaskService:
+        if self._task is None:
+            raise LifecycleError("task service not initialized")
+        return self._task
 
     # --- lifecycle -----------------------------------------------------
 
@@ -196,6 +220,30 @@ class Runtime:
             delegation_service.start(self._config)
             delegation_service.register_health_check(health)
 
+            from jarvis.workspace.service import WorkspaceService
+
+            workspace_service = WorkspaceService(tools=tool_service)
+            self._workspace = workspace_service
+            workspace_service.publisher = bus.publish_nowait
+            workspace_service.start(self._config)
+            workspace_service.register_health_check(health)
+
+            from jarvis.planning.service import PlanningService
+
+            planning_service = PlanningService()
+            self._planning = planning_service
+            planning_service.publisher = bus.publish_nowait
+            planning_service.start(self._config)
+            planning_service.register_health_check(health)
+
+            from jarvis.task.service import TaskService
+
+            task_service = TaskService(tools=tool_service, memory=memory_service)
+            self._task = task_service
+            task_service.publisher = bus.publish_nowait
+            task_service.start(self._config)
+            task_service.register_health_check(health)
+
             registry.start_all()
 
             await bus.publish(
@@ -224,6 +272,12 @@ class Runtime:
             self._lifecycle.transition(RuntimeState.STOPPING)
 
         bus = self._bus
+        if self._task is not None:
+            self._task.shutdown()
+        if self._planning is not None:
+            self._planning.shutdown()
+        if self._workspace is not None:
+            self._workspace.shutdown()
         if self._delegation is not None:
             self._delegation.shutdown()
         if self._agent is not None:

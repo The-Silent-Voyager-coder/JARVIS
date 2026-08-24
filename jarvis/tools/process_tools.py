@@ -50,7 +50,7 @@ def _list_processes() -> list[dict[str, Any]]:
             ["tasklist", "/FO", "CSV", "/NH"],
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=30,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:

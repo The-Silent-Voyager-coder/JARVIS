@@ -81,6 +81,17 @@ DELEGATION_FAILED = "DelegationFailed"
 DELEGATION_CANCELLED = "DelegationCancelled"
 DELEGATION_TIMED_OUT = "DelegationTimedOut"
 
+# Phase 6 — workspace / planning / task (bounded project intelligence)
+WORKSPACE_SCANNED = "WorkspaceScanned"
+WORKSPACE_SCAN_FAILED = "WorkspaceScanFailed"
+PLAN_CREATED = "PlanCreated"
+PLAN_FAILED = "PlanFailed"
+TASK_STEP_STARTED = "TaskStepStarted"
+TASK_STEP_COMPLETED = "TaskStepCompleted"
+TASK_STEP_FAILED = "TaskStepFailed"
+TASK_CANCELLED = "TaskCancelled"
+TASK_TIMED_OUT = "TaskTimedOut"
+
 DOCUMENTED_EVENT_TYPES: frozenset[str] = frozenset(
     {
         USER_MESSAGE_RECEIVED,
@@ -143,6 +154,15 @@ DOCUMENTED_EVENT_TYPES: frozenset[str] = frozenset(
         DELEGATION_FAILED,
         DELEGATION_CANCELLED,
         DELEGATION_TIMED_OUT,
+        WORKSPACE_SCANNED,
+        WORKSPACE_SCAN_FAILED,
+        PLAN_CREATED,
+        PLAN_FAILED,
+        TASK_STEP_STARTED,
+        TASK_STEP_COMPLETED,
+        TASK_STEP_FAILED,
+        TASK_CANCELLED,
+        TASK_TIMED_OUT,
     }
 )
 

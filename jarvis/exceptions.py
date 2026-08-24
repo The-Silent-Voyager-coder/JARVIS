@@ -151,3 +151,59 @@ class DelegationTimeoutError(DelegationError):
 
 class DelegationUnavailableError(DelegationError):
     """The delegation subsystem failed to start and cannot serve requests."""
+
+
+class WorkspaceError(JarvisError):
+    """Workspace discovery failed."""
+
+
+class WorkspaceValidationError(WorkspaceError):
+    """Workspace input did not pass validation."""
+
+
+class WorkspaceUnavailableError(WorkspaceError):
+    """Workspace subsystem not available."""
+
+
+class PlanningError(JarvisError):
+    """Planning failed."""
+
+
+class PlanningValidationError(PlanningError):
+    """Plan input did not pass validation."""
+
+
+class PlanningUnavailableError(PlanningError):
+    """Planning subsystem not available."""
+
+
+class TaskError(JarvisError):
+    """Task execution failed."""
+
+
+class TaskValidationError(TaskError):
+    """Task input did not pass validation."""
+
+
+class TaskStateError(TaskError):
+    """Invalid task state transition."""
+
+
+class TaskLimitError(TaskError):
+    """Task limit was reached (bounded execution)."""
+
+    def __init__(self, message: str, *, kind: str = "limit") -> None:
+        super().__init__(message)
+        self.kind = kind
+
+
+class TaskCancelledError(TaskError):
+    """Task was cancelled."""
+
+
+class TaskTimeoutError(TaskError):
+    """Task exceeded its wall-clock limit."""
+
+
+class TaskUnavailableError(TaskError):
+    """Task subsystem not available."""

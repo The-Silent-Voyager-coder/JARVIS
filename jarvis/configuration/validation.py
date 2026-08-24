@@ -24,10 +24,12 @@ from jarvis.configuration.model import (
     LoggingConfig,
     MemoryConfig,
     OpenCodeProviderConfig,
+    PlanningConfig,
     RiskLevel,
     SecurityConfig,
     SecurityMode,
     SttConfig,
+    TaskConfig,
     TasksConfig,
     ToolDefaultsConfig,
     ToolsConfig,
@@ -35,6 +37,7 @@ from jarvis.configuration.model import (
     TtsConfig,
     VoiceConfig,
     WakeWordConfig,
+    WorkspaceConfig,
 )
 
 LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
@@ -157,6 +160,25 @@ SCHEMA: dict[str, dict[str, Field]] = {
         "max_permission_requests": Field("positive_int", _describe("positive_int")),
         "max_session_count": Field("positive_int", _describe("positive_int")),
         "max_delegation_depth": Field("positive_int", _describe("positive_int")),
+    },
+    "workspace": {
+        "enabled": Field("bool", _describe("bool")),
+        "max_scan_depth": Field("positive_int", _describe("positive_int")),
+        "max_entries": Field("positive_int", _describe("positive_int")),
+        "scan_timeout_seconds": Field("positive_number", _describe("positive_number")),
+        "database_path": Field("path", _describe("path")),
+    },
+    "planning": {
+        "enabled": Field("bool", _describe("bool")),
+        "max_plan_steps": Field("positive_int", _describe("positive_int")),
+        "database_path": Field("path", _describe("path")),
+    },
+    "task": {
+        "enabled": Field("bool", _describe("bool")),
+        "max_steps": Field("positive_int", _describe("positive_int")),
+        "per_step_timeout_seconds": Field("positive_number", _describe("positive_number")),
+        "total_timeout_seconds": Field("positive_number", _describe("positive_number")),
+        "database_path": Field("path", _describe("path")),
     },
     "security": {
         "mode": Field(
@@ -374,6 +396,9 @@ def validate(raw: dict[str, Any]) -> list[ConfigProblem]:
 
     _validate_agent_ceilings(raw, errors)
     _validate_delegation_ceilings(raw, errors)
+    _validate_workspace_ceilings(raw, errors)
+    _validate_planning_ceilings(raw, errors)
+    _validate_task_ceilings(raw, errors)
 
     return errors
 
@@ -442,6 +467,76 @@ def _validate_agent_ceilings(raw: dict[str, Any], errors: list[ConfigProblem]) -
             check_bounded(f"agent.{name}", value, ceiling)
         except ValueError as exc:
             errors.append(ConfigProblem("agent", name, value, str(exc)))
+
+
+def _validate_workspace_ceilings(raw: dict[str, Any], errors: list[ConfigProblem]) -> None:
+    """Reject workspace limits above ceilings (Phase 6)."""
+    from jarvis.workspace.limits import (
+        MAX_ENTRIES_CEILING,
+        MAX_SCAN_DEPTH_CEILING,
+        SCAN_TIMEOUT_SECONDS_CEILING,
+        check_bounded,
+    )
+
+    workspace = raw.get("workspace")
+    if not isinstance(workspace, dict):
+        return
+    bounded_fields = (
+        ("max_scan_depth", MAX_SCAN_DEPTH_CEILING),
+        ("max_entries", MAX_ENTRIES_CEILING),
+        ("scan_timeout_seconds", SCAN_TIMEOUT_SECONDS_CEILING),
+    )
+    for name, ceiling in bounded_fields:
+        value = workspace.get(name)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        try:
+            check_bounded(f"workspace.{name}", value, ceiling)
+        except ValueError as exc:
+            errors.append(ConfigProblem("workspace", name, value, str(exc)))
+
+
+def _validate_planning_ceilings(raw: dict[str, Any], errors: list[ConfigProblem]) -> None:
+    """Reject planning limits above ceilings (Phase 6)."""
+    from jarvis.planning.limits import MAX_PLAN_STEPS_CEILING, check_bounded
+
+    planning = raw.get("planning")
+    if not isinstance(planning, dict):
+        return
+    value = planning.get("max_plan_steps")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return
+    try:
+        check_bounded("planning.max_plan_steps", value, MAX_PLAN_STEPS_CEILING)
+    except ValueError as exc:
+        errors.append(ConfigProblem("planning", "max_plan_steps", value, str(exc)))
+
+
+def _validate_task_ceilings(raw: dict[str, Any], errors: list[ConfigProblem]) -> None:
+    """Reject task limits above ceilings (Phase 6)."""
+    from jarvis.task.limits import (
+        MAX_STEPS_CEILING,
+        PER_STEP_TIMEOUT_CEILING,
+        TOTAL_TIMEOUT_CEILING,
+        check_bounded,
+    )
+
+    task = raw.get("task")
+    if not isinstance(task, dict):
+        return
+    bounded_fields = (
+        ("max_steps", MAX_STEPS_CEILING),
+        ("per_step_timeout_seconds", PER_STEP_TIMEOUT_CEILING),
+        ("total_timeout_seconds", TOTAL_TIMEOUT_CEILING),
+    )
+    for name, ceiling in bounded_fields:
+        value = task.get(name)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        try:
+            check_bounded(f"task.{name}", value, ceiling)
+        except ValueError as exc:
+            errors.append(ConfigProblem("task", name, value, str(exc)))
 
 
 def _matches(kind: Kind, value: Any) -> bool:
@@ -670,6 +765,28 @@ def build_config(raw: dict[str, Any]) -> JarvisConfig:
         max_delegation_depth=int(raw["delegation"]["max_delegation_depth"]),
     )
 
+    workspace = WorkspaceConfig(
+        enabled=bool(raw["workspace"]["enabled"]),
+        max_scan_depth=int(raw["workspace"]["max_scan_depth"]),
+        max_entries=int(raw["workspace"]["max_entries"]),
+        scan_timeout_seconds=float(raw["workspace"]["scan_timeout_seconds"]),
+        database_path=p("workspace", "database_path"),
+    )
+
+    planning = PlanningConfig(
+        enabled=bool(raw["planning"]["enabled"]),
+        max_plan_steps=int(raw["planning"]["max_plan_steps"]),
+        database_path=p("planning", "database_path"),
+    )
+
+    task = TaskConfig(
+        enabled=bool(raw["task"]["enabled"]),
+        max_steps=int(raw["task"]["max_steps"]),
+        per_step_timeout_seconds=float(raw["task"]["per_step_timeout_seconds"]),
+        total_timeout_seconds=float(raw["task"]["total_timeout_seconds"]),
+        database_path=p("task", "database_path"),
+    )
+
     security = SecurityConfig(
         default_mode=SecurityMode(str(raw["security"]["default_mode"])),
         mode=ToolSecurityMode(str(raw["security"]["mode"])),
@@ -704,6 +821,9 @@ def build_config(raw: dict[str, Any]) -> JarvisConfig:
         tools=tools,
         agent=agent,
         delegation=delegation,
+        workspace=workspace,
+        planning=planning,
+        task=task,
         security=security,
         voice=voice,
     )

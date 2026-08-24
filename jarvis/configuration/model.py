@@ -117,6 +117,37 @@ class TasksConfig:
 
 
 @dataclass(frozen=True)
+class WorkspaceConfig:
+    """Workspace discovery settings (Phase 6)."""
+
+    enabled: bool
+    max_scan_depth: int
+    max_entries: int
+    scan_timeout_seconds: float
+    database_path: Path
+
+
+@dataclass(frozen=True)
+class PlanningConfig:
+    """Planner settings (Phase 6 deterministic templates)."""
+
+    enabled: bool
+    max_plan_steps: int
+    database_path: Path
+
+
+@dataclass(frozen=True)
+class TaskConfig:
+    """Task execution settings (Phase 6 bounded multi-step)."""
+
+    enabled: bool
+    max_steps: int
+    per_step_timeout_seconds: float
+    total_timeout_seconds: float
+    database_path: Path
+
+
+@dataclass(frozen=True)
 class ToolDefaultsConfig:
     default_risk: RiskLevel
 
@@ -216,5 +247,8 @@ class JarvisConfig:
     tools: ToolsConfig
     agent: AgentConfig
     delegation: DelegationConfig
+    workspace: WorkspaceConfig
+    planning: PlanningConfig
+    task: TaskConfig
     security: SecurityConfig
     voice: VoiceConfig

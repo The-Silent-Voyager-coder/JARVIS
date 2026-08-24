@@ -56,14 +56,19 @@ from jarvis.exceptions import (
     MemoryNotFoundError,
     MemoryValidationError,
     ProviderCapabilityError,
+    TaskUnavailableError,
+    TaskValidationError,
     ToolNotFoundError,
     ToolPermissionDeniedError,
     ToolUnavailableError,
     ToolValidationError,
+    WorkspaceUnavailableError,
+    WorkspaceValidationError,
 )
 from jarvis.intelligence.benchmark import format_benchmark, run_benchmark
 from jarvis.memory.models import MemoryType
 from jarvis.memory.service import MemoryService
+from jarvis.task.models import TaskState
 from jarvis.tools.approval import DeterministicApprovalProvider
 from jarvis.tools.models import ApprovalOutcome, ToolRequest
 
@@ -82,6 +87,9 @@ COMPONENT_LABELS: dict[str, str] = {
     "tools": "Tools",
     "agent": "Agent",
     "delegation": "Delegation",
+    "workspace": "Workspace",
+    "planning": "Planning",
+    "task": "Task",
 }
 
 
@@ -309,6 +317,56 @@ def _build_parser() -> argparse.ArgumentParser:
     delegation_cancel.add_argument(
         "--json", action="store_true", help="machine-readable output"
     )
+
+    workspace_parser = subparsers.add_parser("workspace", help="workspace commands")
+    workspace_sub = workspace_parser.add_subparsers(dest="workspace_command", metavar="SUBCOMMAND")
+
+    workspace_scan = workspace_sub.add_parser("scan", help="scan a workspace directory")
+    workspace_scan.add_argument("path", nargs="?", default=None, help="workspace path (default: configured working_directory)")  # noqa: E501
+    workspace_scan.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    workspace_scan.add_argument("--json", action="store_true", help="machine-readable output")
+
+    workspace_info = workspace_sub.add_parser("info", help="show latest workspace info")
+    workspace_info.add_argument("--id", dest="workspace_id", default=None, help="workspace id")
+    workspace_info.add_argument("--path", dest="workspace_path", default=None, help="workspace root path")  # noqa: E501
+    workspace_info.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    workspace_info.add_argument("--json", action="store_true", help="machine-readable output")
+
+    workspace_health = workspace_sub.add_parser("health", help="workspace subsystem health")
+    workspace_health.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    workspace_health.add_argument("--json", action="store_true", help="machine-readable output")
+
+    task_parser = subparsers.add_parser("task", help="task commands")
+    task_sub = task_parser.add_subparsers(dest="task_command", metavar="SUBCOMMAND")
+
+    task_run = task_sub.add_parser("run", help="run a plan file (bounded execution)")
+    task_run.add_argument("plan", metavar="PLAN", help="plan file (.yaml/.json) or plan_id")
+    task_run.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    task_run.add_argument("--json", action="store_true", help="machine-readable output")
+
+    task_resume = task_sub.add_parser("resume", help="resume a paused task")
+    task_resume.add_argument("task_id", metavar="TASK_ID", help="task id to resume")
+    task_resume.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    task_resume.add_argument("--json", action="store_true", help="machine-readable output")
+
+    task_list = task_sub.add_parser("list", help="list tasks")
+    task_list.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    task_list.add_argument("--json", action="store_true", help="machine-readable output")
+    task_list.add_argument("--limit", type=int, default=50, help="max entries (default: 50)")
+
+    task_get = task_sub.add_parser("get", help="get a task by id")
+    task_get.add_argument("task_id", metavar="TASK_ID", help="task id")
+    task_get.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    task_get.add_argument("--json", action="store_true", help="machine-readable output")
+
+    task_cancel = task_sub.add_parser("cancel", help="cancel a task")
+    task_cancel.add_argument("task_id", metavar="TASK_ID", help="task id")
+    task_cancel.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    task_cancel.add_argument("--json", action="store_true", help="machine-readable output")
+
+    task_health = task_sub.add_parser("health", help="task subsystem health")
+    task_health.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    task_health.add_argument("--json", action="store_true", help="machine-readable output")
 
     return parser
 
@@ -1055,6 +1113,270 @@ def _cmd_delegation_cancel(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+# --- workspace -----------------------------------------------------------
+
+
+def _cmd_workspace_scan(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            data = runtime.workspace.scan(args.path)
+        except WorkspaceValidationError as exc:
+            print(f"jarvis workspace scan: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+        except WorkspaceUnavailableError as exc:
+            print(f"jarvis workspace scan: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Workspace Scan")
+    print(f"  id           {data.get('id', '-')}")
+    print(f"  root         {data.get('root', '-')}")
+    print(f"  project_type {data.get('project_type', '-')}")
+    print(f"  name         {data.get('name', '-')}")
+    eps = data.get("entry_points", [])
+    print(f"  entry_points {len(eps)}")
+    for ep in eps[:5]:
+        print(f"    {ep.get('path', '-')} ({ep.get('kind', '-')})")
+    struct = data.get("structure") or {}
+    print(f"  structure    files={struct.get('total_files', 0)} dirs={struct.get('total_dirs', 0)}")
+    return EXIT_OK
+
+
+def _cmd_workspace_info(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            if args.workspace_id or args.workspace_path:
+                data = runtime.workspace.info(workspace_id=args.workspace_id, root=args.workspace_path)  # noqa: E501
+            else:
+                data = runtime.workspace.info()
+            if data is None:
+                print("jarvis workspace info: not found", file=sys.stderr)
+                return EXIT_FAILURE
+        except WorkspaceValidationError as exc:
+            print(f"jarvis workspace info: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+        except WorkspaceUnavailableError as exc:
+            print(f"jarvis workspace info: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Workspace Info")
+    for k, v in data.items():
+        if k == "entry_points":
+            print(f"  {k:<14} {len(v)} entries")
+        elif k == "structure" and isinstance(v, dict):
+            print(f"  {k:<14} files={v.get('total_files',0)} dirs={v.get('total_dirs',0)}")
+        else:
+            print(f"  {k:<14} {v}")
+    return EXIT_OK
+
+
+def _cmd_workspace_health(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        data = runtime.workspace.health()
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK if data.get("available", False) else EXIT_FAILURE
+    print("J.A.R.V.I.S. Workspace Health")
+    print(f"  status    {data.get('status', 'unknown')}")
+    print(f"  available {data.get('available', False)}")
+    print(f"  enabled   {data.get('enabled', '-')}")
+    print(f"  detail    {data.get('detail') or ''}")
+    return EXIT_OK if data.get("available", False) else EXIT_FAILURE
+
+
+# --- task ----------------------------------------------------------------
+
+
+def _cmd_task_run(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            report = runtime.task.run(args.plan)
+        except TaskValidationError as exc:
+            print(f"jarvis task run: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+        except TaskUnavailableError as exc:
+            print(f"jarvis task run: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+        except JarvisError as exc:
+            print(f"jarvis task run: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    success = report.state == TaskState.COMPLETED
+    data = report.to_dict()
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK if success else EXIT_FAILURE
+    print("J.A.R.V.I.S. Task Run")
+    print(f"  task_id  {data.get('task_id', '-')}")
+    print(f"  plan_id  {data.get('plan_id', '-')}")
+    print(f"  state    {data.get('state', '-')}")
+    print(f"  steps    {data.get('completed_steps',0)}/{data.get('total_steps',0)}")
+    if data.get("summary"):
+        print(f"  summary  {data['summary']}")
+    return EXIT_OK if success else EXIT_FAILURE
+
+
+def _cmd_task_resume(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            report = runtime.task.resume(args.task_id)
+        except TaskValidationError as exc:
+            print(f"jarvis task resume: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+        except TaskUnavailableError as exc:
+            print(f"jarvis task resume: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    success = report.state == TaskState.COMPLETED
+    data = report.to_dict()
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK if success else EXIT_FAILURE
+    print("J.A.R.V.I.S. Task Resume")
+    print(f"  task_id  {data.get('task_id', '-')}")
+    print(f"  state    {data.get('state', '-')}")
+    return EXIT_OK if success else EXIT_FAILURE
+
+
+def _cmd_task_list(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            items = runtime.task.list(limit=args.limit)
+        except TaskUnavailableError as exc:
+            print(f"jarvis task list: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(items, indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Tasks")
+    if not items:
+        print("  (none)")
+    for it in items:
+        print(f"  {it.get('id','-'):<36} {it.get('state','-'):<12} {it.get('current_step',0)}/{it.get('total_steps',0)} {it.get('goal','')[:40]}")  # noqa: E501
+    return EXIT_OK
+
+
+def _cmd_task_get(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            data = runtime.task.get(args.task_id)
+        except TaskValidationError as exc:
+            print(f"jarvis task get: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+        except TaskUnavailableError as exc:
+            print(f"jarvis task get: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Task")
+    for k, v in data.items():
+        if k == "step_results":
+            print(f"  {k}: {len(v)} steps")
+            for sr in v[:5]:
+                print(f"    {sr.get('sequence', '-')}: {sr.get('tool_id','-')} success={sr.get('success', False)}")  # noqa: E501
+        else:
+            print(f"  {k:<14} {v}")
+    return EXIT_OK
+
+
+def _cmd_task_cancel(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            data = runtime.task.cancel(args.task_id)
+        except TaskValidationError as exc:
+            print(f"jarvis task cancel: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+        except TaskUnavailableError as exc:
+            print(f"jarvis task cancel: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Task Cancel")
+    print(f"  task_id    {data.get('task_id','-')}")
+    print(f"  cancelling {data.get('cancelling', False)}")
+    return EXIT_OK
+
+
+def _cmd_task_health(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        data = runtime.task.health()
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK if data.get("available", False) else EXIT_FAILURE
+    print("J.A.R.V.I.S. Task Health")
+    print(f"  status    {data.get('status','unknown')}")
+    print(f"  available {data.get('available', False)}")
+    print(f"  enabled   {data.get('enabled','-')}")
+    print(f"  detail    {data.get('detail') or ''}")
+    return EXIT_OK if data.get("available", False) else EXIT_FAILURE
+
+
 def _cmd_health(args: argparse.Namespace) -> int:
     try:
         runtime = Runtime.create(args.config)
@@ -1144,6 +1466,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.delegation_command == "cancel":
             return _cmd_delegation_cancel(args)
         parser.error("delegation requires a subcommand: health, list, get, cancel")
+    if args.command == "workspace":
+        if args.workspace_command == "scan":
+            return _cmd_workspace_scan(args)
+        if args.workspace_command == "info":
+            return _cmd_workspace_info(args)
+        if args.workspace_command == "health":
+            return _cmd_workspace_health(args)
+        parser.error("workspace requires a subcommand: scan, info, health")
+    if args.command == "task":
+        if args.task_command == "run":
+            return _cmd_task_run(args)
+        if args.task_command == "resume":
+            return _cmd_task_resume(args)
+        if args.task_command == "list":
+            return _cmd_task_list(args)
+        if args.task_command == "get":
+            return _cmd_task_get(args)
+        if args.task_command == "cancel":
+            return _cmd_task_cancel(args)
+        if args.task_command == "health":
+            return _cmd_task_health(args)
+        parser.error("task requires a subcommand: run, resume, list, get, cancel, health")
 
     parser.print_help()
     return EXIT_OK

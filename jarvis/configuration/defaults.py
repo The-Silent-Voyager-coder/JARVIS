@@ -86,6 +86,25 @@ DEFAULTS: dict[str, object] = {
         "max_session_count": 3,
         "max_delegation_depth": 1,
     },
+    "workspace": {
+        "enabled": True,
+        "max_scan_depth": 3,
+        "max_entries": 500,
+        "scan_timeout_seconds": 10.0,
+        "database_path": "C:/JARVIS/data/workspace.db",
+    },
+    "planning": {
+        "enabled": True,
+        "max_plan_steps": 25,
+        "database_path": "C:/JARVIS/data/plans.db",
+    },
+    "task": {
+        "enabled": True,
+        "max_steps": 25,
+        "per_step_timeout_seconds": 30.0,
+        "total_timeout_seconds": 600.0,
+        "database_path": "C:/JARVIS/data/tasks.db",
+    },
     "security": {
         "mode": "normal",
         "default_mode": "ask",

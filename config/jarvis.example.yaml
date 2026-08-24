@@ -104,6 +104,28 @@ delegation:
   # Maximum delegation depth; 1 means no recursive delegation.
   max_delegation_depth: 1
 
+workspace:
+  # Workspace discovery (Phase 6) — enumerate allowed roots, detect type.
+  enabled: true
+  max_scan_depth: 3
+  max_entries: 500
+  scan_timeout_seconds: 10
+  database_path: "C:/JARVIS/data/workspace.db"
+
+planning:
+  # Deterministic plan decomposition (Phase 6) — no AI provider calls.
+  enabled: true
+  max_plan_steps: 25
+  database_path: "C:/JARVIS/data/plans.db"
+
+task:
+  # Bounded multi-step execution over the secure tool pipeline (Phase 6).
+  enabled: true
+  max_steps: 25
+  per_step_timeout_seconds: 30
+  total_timeout_seconds: 600
+  database_path: "C:/JARVIS/data/tasks.db"
+
 security:
   # Tool-system security mode: lockdown | normal | development
   # lockdown: SAFE tools only. normal: SAFE/LOW auto, MEDIUM/HIGH ask.
