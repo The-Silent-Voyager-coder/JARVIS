@@ -25,6 +25,9 @@ Commands:
     jarvis delegation list [--config PATH]     running tasks then recent results
     jarvis delegation get <task_id> [--config PATH]  snapshot of one task
     jarvis delegation cancel <task_id> [--config PATH]  cancel a running task
+    jarvis hud|status|dashboard [--config PATH]  read-only HUD (local-first,
+            zero-cost status/dashboard over health, memory, agent,
+            delegation, workspace, planning, task)
 
 Exit codes: 0 success, 1 general failure, 2 invalid configuration/input.
 Memory content is never printed unless --content is passed.
@@ -51,6 +54,7 @@ from jarvis.exceptions import (
     ConfigurationError,
     DelegationUnavailableError,
     DelegationValidationError,
+    HudValidationError,
     JarvisError,
     MemoryError,
     MemoryNotFoundError,
@@ -66,6 +70,9 @@ from jarvis.exceptions import (
     WorkspaceValidationError,
 )
 from jarvis.intelligence.benchmark import format_benchmark, run_benchmark
+from jarvis.interface.formatting import format_dashboard, format_status
+from jarvis.interface.models import MAX_LIMIT, VALID_SECTIONS
+from jarvis.interface.service import HudService
 from jarvis.memory.models import MemoryType
 from jarvis.memory.service import MemoryService
 from jarvis.task.models import TaskState
@@ -367,6 +374,28 @@ def _build_parser() -> argparse.ArgumentParser:
     task_health = task_sub.add_parser("health", help="task subsystem health")
     task_health.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
     task_health.add_argument("--json", action="store_true", help="machine-readable output")
+
+    for hud_command, hud_help in (
+        ("hud", "read-only HUD dashboard (all sections)"),
+        ("status", "read-only HUD status (compact health summary)"),
+        ("dashboard", "read-only HUD dashboard (all sections)"),
+    ):
+        hud_parser = subparsers.add_parser(hud_command, help=hud_help)
+        hud_parser.add_argument(
+            "--config", metavar="PATH", default=None, help="configuration file to use"
+        )
+        hud_parser.add_argument("--json", action="store_true", help="machine-readable output")
+        hud_parser.add_argument(
+            "--limit", type=int, default=5, help=f"max list entries per section (1..{MAX_LIMIT})"
+        )
+        hud_parser.add_argument(
+            "--section",
+            metavar="SECTION",
+            action="append",
+            default=None,
+            dest="sections",
+            help=f"restrict to section(s) in {list(VALID_SECTIONS)} (repeatable)",
+        )
 
     return parser
 
@@ -1377,6 +1406,36 @@ def _cmd_task_health(args: argparse.Namespace) -> int:
     return EXIT_OK if data.get("available", False) else EXIT_FAILURE
 
 
+# --- hud -----------------------------------------------------------------
+
+
+def _cmd_hud(args: argparse.Namespace, *, compact: bool) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        service = HudService()
+        try:
+            snapshot = service.snapshot(
+                runtime, limit=args.limit, sections=args.sections
+            )
+        except HudValidationError as exc:
+            print(f"jarvis {args.command}: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(snapshot.to_dict(), indent=2))
+        return EXIT_OK
+    if compact and args.sections is None:
+        print(format_status(snapshot))
+    else:
+        print(format_dashboard(snapshot))
+    return EXIT_OK
+
+
 def _cmd_health(args: argparse.Namespace) -> int:
     try:
         runtime = Runtime.create(args.config)
@@ -1488,6 +1547,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.task_command == "health":
             return _cmd_task_health(args)
         parser.error("task requires a subcommand: run, resume, list, get, cancel, health")
+    if args.command == "hud":
+        return _cmd_hud(args, compact=False)
+    if args.command == "status":
+        return _cmd_hud(args, compact=True)
+    if args.command == "dashboard":
+        return _cmd_hud(args, compact=False)
 
     parser.print_help()
     return EXIT_OK

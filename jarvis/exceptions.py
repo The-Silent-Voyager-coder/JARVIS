@@ -207,3 +207,15 @@ class TaskTimeoutError(TaskError):
 
 class TaskUnavailableError(TaskError):
     """Task subsystem not available."""
+
+
+class HudError(JarvisError):
+    """The HUD subsystem failed (read-only aggregation error)."""
+
+
+class HudValidationError(HudError):
+    """A HUD request did not pass validation (unknown section, bad limit)."""
+
+
+class HudUnavailableError(HudError):
+    """The HUD snapshot could not be assembled (runtime not started)."""
