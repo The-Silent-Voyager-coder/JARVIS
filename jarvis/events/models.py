@@ -97,6 +97,10 @@ VISION_CAPTURED = "VisionCaptured"
 VISION_DESCRIBED = "VisionDescribed"
 VISION_FAILED = "VisionFailed"
 
+# Phase 6 — voice (bounded local-first wake word + STT/TTS)
+VOICE_SPOKEN = "VoiceSpoken"
+VOICE_FAILED = "VoiceFailed"
+
 DOCUMENTED_EVENT_TYPES: frozenset[str] = frozenset(
     {
         USER_MESSAGE_RECEIVED,
@@ -171,6 +175,8 @@ DOCUMENTED_EVENT_TYPES: frozenset[str] = frozenset(
         VISION_CAPTURED,
         VISION_DESCRIBED,
         VISION_FAILED,
+        VOICE_SPOKEN,
+        VOICE_FAILED,
     }
 )
 

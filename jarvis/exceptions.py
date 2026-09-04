@@ -235,3 +235,19 @@ class VisionTimeoutError(VisionError):
 
 class VisionUnavailableError(VisionError):
     """The vision subsystem failed to start and cannot serve requests."""
+
+
+class VoiceError(JarvisError):
+    """The voice subsystem failed (wake word, STT, TTS, or storage)."""
+
+
+class VoiceValidationError(VoiceError):
+    """A voice model or request did not pass validation."""
+
+
+class VoiceTimeoutError(VoiceError):
+    """A listen/speak turn exceeded its wall-clock limit."""
+
+
+class VoiceUnavailableError(VoiceError):
+    """The voice subsystem failed to start and cannot serve requests."""

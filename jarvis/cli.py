@@ -32,6 +32,11 @@ Commands:
     jarvis vision capture [--width N] [--height N] [--out PATH]
             capture a bounded local frame (metadata only, never pixels)
     jarvis vision describe [--capture-id ID]       OCR-free stub description
+    jarvis voice health [--config PATH]            voice subsystem health
+    jarvis voice listen (--text TEXT | --audio-path PATH) [--session-id ID]
+            transcribe one bounded turn (mock STT, metadata + text)
+    jarvis voice speak --text TEXT [--out PATH] [--session-id ID]
+            synthesize one bounded utterance (mock TTS, WAV)
 
 Exit codes: 0 success, 1 general failure, 2 invalid configuration/input.
 Memory content is never printed unless --content is passed.
@@ -46,6 +51,7 @@ import sys
 import uuid
 from collections.abc import Sequence
 from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 
 from jarvis import __version__
 from jarvis.agent.models import AgentState
@@ -73,6 +79,9 @@ from jarvis.exceptions import (
     VisionError,
     VisionUnavailableError,
     VisionValidationError,
+    VoiceError,
+    VoiceUnavailableError,
+    VoiceValidationError,
     WorkspaceUnavailableError,
     WorkspaceValidationError,
 )
@@ -88,6 +97,7 @@ from jarvis.tools.models import ApprovalOutcome, ToolRequest
 from jarvis.vision.limits import DEFAULT_HEIGHT as DEFAULT_VISION_HEIGHT
 from jarvis.vision.limits import DEFAULT_WIDTH as DEFAULT_VISION_WIDTH
 from jarvis.vision.service import VisionService
+from jarvis.voice.service import VoiceService
 
 EXIT_OK = 0
 EXIT_FAILURE = 1
@@ -427,6 +437,27 @@ def _build_parser() -> argparse.ArgumentParser:
     vision_describe.add_argument("--capture-id", default=None, help="capture id (default: latest)")
     vision_describe.add_argument("--max-regions", type=int, default=None, help="region cap (bounded)")  # noqa: E501
     vision_describe.add_argument("--session-id", default=None, help="session isolation context")
+
+    voice_parser = subparsers.add_parser("voice", help="voice commands")
+    voice_sub = voice_parser.add_subparsers(dest="voice_command", metavar="SUBCOMMAND")
+
+    voice_health = voice_sub.add_parser("health", help="voice subsystem health")
+    voice_health.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    voice_health.add_argument("--json", action="store_true", help="machine-readable output")
+
+    voice_listen = voice_sub.add_parser("listen", help="transcribe one bounded turn")  # noqa: E501
+    voice_listen.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    voice_listen.add_argument("--json", action="store_true", help="machine-readable output")
+    voice_listen.add_argument("--text", default=None, help="text to transcribe (dictation stub)")  # noqa: E501
+    voice_listen.add_argument("--audio-path", default=None, help="WAV file to transcribe")  # noqa: E501
+    voice_listen.add_argument("--session-id", default=None, help="session turn-budget context")  # noqa: E501
+
+    voice_speak = voice_sub.add_parser("speak", help="synthesize one bounded utterance")  # noqa: E501
+    voice_speak.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    voice_speak.add_argument("--json", action="store_true", help="machine-readable output")
+    voice_speak.add_argument("--text", required=True, help="text to synthesize (bounded)")  # noqa: E501
+    voice_speak.add_argument("--out", metavar="PATH", default=None, help="extra .wav copy (must be inside allowed roots)")  # noqa: E501
+    voice_speak.add_argument("--session-id", default=None, help="session turn-budget context")  # noqa: E501
 
     return parser
 
@@ -1578,6 +1609,118 @@ def _cmd_vision_describe(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+# --- voice -----------------------------------------------------------------
+
+
+def _voice_service_from_args(args: argparse.Namespace) -> VoiceService:
+    try:
+        loaded = load_config(args.config)
+    except ConfigurationError:
+        raise
+    service = VoiceService()
+    service.start(loaded.config)
+    return service
+
+
+def _cmd_voice_health(args: argparse.Namespace) -> int:
+    try:
+        service = _voice_service_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        data = service.health()
+    finally:
+        service.shutdown()
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK if data.get("available", False) else EXIT_FAILURE
+    print("J.A.R.V.I.S. Voice Health")
+    print(f"  status    {data.get('status', 'unknown')}")
+    print(f"  available {data.get('available', False)}")
+    print(f"  stt       {data.get('stt_backend', '-')}")
+    print(f"  tts       {data.get('tts_backend', '-')}")
+    print(f"  detail    {data.get('detail') or ''}")
+    return EXIT_OK if data.get("available", False) else EXIT_FAILURE
+
+
+def _cmd_voice_listen(args: argparse.Namespace) -> int:
+    if (args.text is None) == (args.audio_path is None):
+        print(
+            "jarvis voice listen: provide exactly one of --text or --audio-path",
+            file=sys.stderr,
+        )
+        return EXIT_INVALID
+    try:
+        service = _voice_service_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            audio: bytes | None = None
+            if args.audio_path is not None:
+                try:
+                    audio = Path(args.audio_path).read_bytes()
+                except OSError as exc:
+                    print(f"jarvis voice listen: cannot read audio file: {exc}", file=sys.stderr)
+                    return EXIT_INVALID
+            record = service.listen(
+                args.text, audio=audio, session_id=args.session_id
+            )
+        except VoiceValidationError as exc:
+            print(f"jarvis voice listen: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+        except (VoiceUnavailableError, VoiceError) as exc:
+            print(f"jarvis voice listen: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        service.shutdown()
+    if args.json:
+        print(json.dumps(record.to_dict(include_text=True), indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Voice Transcript")
+    print(f"  id         {record.id}")
+    print(f"  backend    {record.backend.value}")
+    print(f"  text_chars {record.text_chars}")
+    print(f"  text       {record.text}")
+    return EXIT_OK
+
+
+def _cmd_voice_speak(args: argparse.Namespace) -> int:
+    if not args.text or not args.text.strip():
+        print("jarvis voice speak: --text must not be empty", file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        service = _voice_service_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            record = service.speak(
+                args.text, session_id=args.session_id, output_path=args.out
+            )
+        except VoiceValidationError as exc:
+            print(f"jarvis voice speak: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+        except (VoiceUnavailableError, VoiceError) as exc:
+            print(f"jarvis voice speak: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        service.shutdown()
+    if args.json:
+        print(json.dumps(record.to_dict(), indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Voice Speech")
+    print(f"  id           {record.id}")
+    print(f"  backend      {record.backend.value}")
+    print(f"  text_chars   {record.text_chars}")
+    print(f"  size_bytes   {record.size_bytes}")
+    print(f"  output_path  {record.output_path or '-'}")
+    return EXIT_OK
+
+
 def _cmd_health(args: argparse.Namespace) -> int:
     try:
         runtime = Runtime.create(args.config)
@@ -1703,6 +1846,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.vision_command == "describe":
             return _cmd_vision_describe(args)
         parser.error("vision requires a subcommand: health, capture, describe")
+    if args.command == "voice":
+        if args.voice_command == "health":
+            return _cmd_voice_health(args)
+        if args.voice_command == "listen":
+            return _cmd_voice_listen(args)
+        if args.voice_command == "speak":
+            return _cmd_voice_speak(args)
+        parser.error("voice requires a subcommand: health, listen, speak")
 
     parser.print_help()
     return EXIT_OK
