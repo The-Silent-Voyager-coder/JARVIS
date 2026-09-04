@@ -92,6 +92,11 @@ TASK_STEP_FAILED = "TaskStepFailed"
 TASK_CANCELLED = "TaskCancelled"
 TASK_TIMED_OUT = "TaskTimedOut"
 
+# Phase 8 — vision (bounded local-first capture + OCR-free grounding)
+VISION_CAPTURED = "VisionCaptured"
+VISION_DESCRIBED = "VisionDescribed"
+VISION_FAILED = "VisionFailed"
+
 DOCUMENTED_EVENT_TYPES: frozenset[str] = frozenset(
     {
         USER_MESSAGE_RECEIVED,
@@ -163,6 +168,9 @@ DOCUMENTED_EVENT_TYPES: frozenset[str] = frozenset(
         TASK_STEP_FAILED,
         TASK_CANCELLED,
         TASK_TIMED_OUT,
+        VISION_CAPTURED,
+        VISION_DESCRIBED,
+        VISION_FAILED,
     }
 )
 

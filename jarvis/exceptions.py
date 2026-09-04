@@ -219,3 +219,19 @@ class HudValidationError(HudError):
 
 class HudUnavailableError(HudError):
     """The HUD snapshot could not be assembled (runtime not started)."""
+
+
+class VisionError(JarvisError):
+    """The vision subsystem failed (capture, grounding, or storage)."""
+
+
+class VisionValidationError(VisionError):
+    """A vision model or request did not pass validation."""
+
+
+class VisionTimeoutError(VisionError):
+    """A capture exceeded its wall-clock limit."""
+
+
+class VisionUnavailableError(VisionError):
+    """The vision subsystem failed to start and cannot serve requests."""

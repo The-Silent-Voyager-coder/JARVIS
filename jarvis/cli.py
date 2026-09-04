@@ -28,6 +28,10 @@ Commands:
     jarvis hud|status|dashboard [--config PATH]  read-only HUD (local-first,
             zero-cost status/dashboard over health, memory, agent,
             delegation, workspace, planning, task)
+    jarvis vision health [--config PATH]           vision subsystem health
+    jarvis vision capture [--width N] [--height N] [--out PATH]
+            capture a bounded local frame (metadata only, never pixels)
+    jarvis vision describe [--capture-id ID]       OCR-free stub description
 
 Exit codes: 0 success, 1 general failure, 2 invalid configuration/input.
 Memory content is never printed unless --content is passed.
@@ -66,6 +70,9 @@ from jarvis.exceptions import (
     ToolPermissionDeniedError,
     ToolUnavailableError,
     ToolValidationError,
+    VisionError,
+    VisionUnavailableError,
+    VisionValidationError,
     WorkspaceUnavailableError,
     WorkspaceValidationError,
 )
@@ -78,6 +85,9 @@ from jarvis.memory.service import MemoryService
 from jarvis.task.models import TaskState
 from jarvis.tools.approval import DeterministicApprovalProvider
 from jarvis.tools.models import ApprovalOutcome, ToolRequest
+from jarvis.vision.limits import DEFAULT_HEIGHT as DEFAULT_VISION_HEIGHT
+from jarvis.vision.limits import DEFAULT_WIDTH as DEFAULT_VISION_WIDTH
+from jarvis.vision.service import VisionService
 
 EXIT_OK = 0
 EXIT_FAILURE = 1
@@ -396,6 +406,27 @@ def _build_parser() -> argparse.ArgumentParser:
             dest="sections",
             help=f"restrict to section(s) in {list(VALID_SECTIONS)} (repeatable)",
         )
+    vision_parser = subparsers.add_parser("vision", help="vision commands")
+    vision_sub = vision_parser.add_subparsers(dest="vision_command", metavar="SUBCOMMAND")
+
+    vision_health = vision_sub.add_parser("health", help="vision subsystem health")
+    vision_health.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    vision_health.add_argument("--json", action="store_true", help="machine-readable output")
+
+    vision_capture = vision_sub.add_parser("capture", help="capture a bounded local frame")
+    vision_capture.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    vision_capture.add_argument("--json", action="store_true", help="machine-readable output")
+    vision_capture.add_argument("--width", type=int, default=None, help="frame width (bounded)")
+    vision_capture.add_argument("--height", type=int, default=None, help="frame height (bounded)")
+    vision_capture.add_argument("--out", metavar="PATH", default=None, help="extra .bmp copy (must be inside allowed roots)")  # noqa: E501
+    vision_capture.add_argument("--session-id", default=None, help="session capture-budget context")  # noqa: E501
+
+    vision_describe = vision_sub.add_parser("describe", help="stub description of a capture")  # noqa: E501
+    vision_describe.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    vision_describe.add_argument("--json", action="store_true", help="machine-readable output")
+    vision_describe.add_argument("--capture-id", default=None, help="capture id (default: latest)")
+    vision_describe.add_argument("--max-regions", type=int, default=None, help="region cap (bounded)")  # noqa: E501
+    vision_describe.add_argument("--session-id", default=None, help="session isolation context")
 
     return parser
 
@@ -1436,6 +1467,117 @@ def _cmd_hud(args: argparse.Namespace, *, compact: bool) -> int:
     return EXIT_OK
 
 
+# --- vision ---------------------------------------------------------------
+
+
+def _vision_service_from_args(args: argparse.Namespace) -> VisionService:
+    try:
+        loaded = load_config(args.config)
+    except ConfigurationError:
+        raise
+    service = VisionService()
+    service.start(loaded.config)
+    return service
+
+
+def _cmd_vision_health(args: argparse.Namespace) -> int:
+    try:
+        service = _vision_service_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        data = service.health()
+    finally:
+        service.shutdown()
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK if data.get("available", False) else EXIT_FAILURE
+    print("J.A.R.V.I.S. Vision Health")
+    print(f"  status    {data.get('status', 'unknown')}")
+    print(f"  available {data.get('available', False)}")
+    print(f"  backend   {data.get('backend', '-')}")
+    print(f"  detail    {data.get('detail') or ''}")
+    return EXIT_OK if data.get("available", False) else EXIT_FAILURE
+
+
+def _cmd_vision_capture(args: argparse.Namespace) -> int:
+    try:
+        service = _vision_service_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            record = service.capture(
+                width=args.width or DEFAULT_VISION_WIDTH,
+                height=args.height or DEFAULT_VISION_HEIGHT,
+                session_id=args.session_id,
+                output_path=args.out,
+            )
+        except VisionValidationError as exc:
+            print(f"jarvis vision capture: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+        except (VisionUnavailableError, VisionError) as exc:
+            print(f"jarvis vision capture: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        service.shutdown()
+    if args.json:
+        print(json.dumps(record.to_dict(), indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Vision Capture")
+    print(f"  id           {record.id}")
+    print(f"  backend      {record.backend.value}")
+    print(f"  dimensions   {record.width}x{record.height}")
+    print(f"  size_bytes   {record.size_bytes}")
+    print(f"  sha256       {record.sha256[:16]}…")
+    print(f"  output_path  {record.output_path or '-'}")
+    return EXIT_OK
+
+
+def _cmd_vision_describe(args: argparse.Namespace) -> int:
+    try:
+        service = _vision_service_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            if args.capture_id:
+                target = args.capture_id
+            else:
+                latest = service.latest()
+                if latest is None:
+                    print("jarvis vision describe: no captures stored", file=sys.stderr)
+                    return EXIT_FAILURE
+                target = latest.id
+            description = service.describe(
+                target,
+                session_id=args.session_id,
+                max_regions=args.max_regions,
+            )
+        except VisionValidationError as exc:
+            print(f"jarvis vision describe: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+        except (VisionUnavailableError, VisionError) as exc:
+            print(f"jarvis vision describe: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        service.shutdown()
+    if args.json:
+        print(json.dumps(description.to_dict(), indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Vision Description")
+    print(f"  capture_id {description.capture_id}")
+    print(f"  backend    {description.backend.value}")
+    print(f"  summary    {description.summary}")
+    print(f"  regions    {len(description.regions)}")
+    for region in list(description.regions)[:8]:
+        print(f"    {region.label} ({region.x},{region.y} {region.width}x{region.height})")  # noqa: E501
+    return EXIT_OK
+
+
 def _cmd_health(args: argparse.Namespace) -> int:
     try:
         runtime = Runtime.create(args.config)
@@ -1553,6 +1695,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _cmd_hud(args, compact=True)
     if args.command == "dashboard":
         return _cmd_hud(args, compact=False)
+    if args.command == "vision":
+        if args.vision_command == "health":
+            return _cmd_vision_health(args)
+        if args.vision_command == "capture":
+            return _cmd_vision_capture(args)
+        if args.vision_command == "describe":
+            return _cmd_vision_describe(args)
+        parser.error("vision requires a subcommand: health, capture, describe")
 
     parser.print_help()
     return EXIT_OK
