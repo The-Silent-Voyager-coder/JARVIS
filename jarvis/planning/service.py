@@ -11,6 +11,7 @@ from jarvis.events.models import PLAN_CREATED, PLAN_FAILED, Event
 from jarvis.exceptions import PlanningUnavailableError, PlanningValidationError
 from jarvis.planning.planner import Planner
 from jarvis.planning.sqlite_repository import SqlitePlanningRepository
+from jarvis.tools.redaction import redact_secrets
 
 log = logging.getLogger("jarvis.planning.service")
 
@@ -72,13 +73,14 @@ class PlanningService:
         try:
             plan = self._planner.create_plan(goal, workspace, plan_id=plan_id)
             self._repository.save(plan)
-            self._publish(PLAN_CREATED, {"plan_id": plan.id, "goal": plan.goal[:120], "steps": len(plan.steps)})  # noqa: E501
+            # Phase 9: goals can embed pasted secrets; audit keeps redacted form.
+            self._publish(PLAN_CREATED, {"plan_id": plan.id, "goal": redact_secrets(plan.goal[:120]), "steps": len(plan.steps)})  # noqa: E501
             return plan.to_dict()
         except PlanningValidationError as exc:
-            self._publish(PLAN_FAILED, {"error": str(exc)[:200], "goal": goal[:120]})
+            self._publish(PLAN_FAILED, {"error": redact_secrets(str(exc)[:200]), "goal": redact_secrets(goal[:120])})  # noqa: E501
             raise
         except Exception as exc:
-            self._publish(PLAN_FAILED, {"error": str(exc)[:200]})
+            self._publish(PLAN_FAILED, {"error": redact_secrets(str(exc)[:200])})
             raise PlanningValidationError(str(exc)) from exc
 
     def get(self, plan_id: str) -> dict[str, Any] | None:

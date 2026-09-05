@@ -29,6 +29,7 @@ from jarvis.exceptions import (
     VoiceUnavailableError,
     VoiceValidationError,
 )
+from jarvis.tools.redaction import redact_secrets
 from jarvis.voice.file_repository import FileVoiceRepository
 from jarvis.voice.limits import VoiceLimits, default_limits
 from jarvis.voice.models import (
@@ -175,7 +176,7 @@ class VoiceService:
         except Exception as exc:
             self._publish(
                 VOICE_FAILED,
-                {"operation": "wake", "reason": str(exc)[:200]},
+                {"operation": "wake", "reason": redact_secrets(str(exc)[:200])},
                 session_id=session_id,
                 task_id=task_id,
             )
@@ -211,7 +212,7 @@ class VoiceService:
         except Exception as exc:
             self._publish(
                 VOICE_FAILED,
-                {"operation": "listen", "reason": str(exc)[:200]},
+                {"operation": "listen", "reason": redact_secrets(str(exc)[:200])},
                 session_id=session_id,
                 task_id=task_id,
             )
@@ -262,7 +263,7 @@ class VoiceService:
         except Exception as exc:
             self._publish(
                 VOICE_FAILED,
-                {"operation": "speak", "reason": str(exc)[:200]},
+                {"operation": "speak", "reason": redact_secrets(str(exc)[:200])},
                 session_id=session_id,
                 task_id=task_id,
             )

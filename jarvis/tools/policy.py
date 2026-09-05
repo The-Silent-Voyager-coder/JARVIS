@@ -20,6 +20,7 @@ from jarvis.configuration.model import ToolSecurityMode
 from jarvis.tools.environment import is_secret_name
 from jarvis.tools.models import Tool, ToolDecision, ToolRequest, ToolRisk
 from jarvis.tools.pathsecurity import canonicalize, is_protected_path, is_within
+from jarvis.tools.redaction import looks_like_secret_value
 from jarvis.tools.shell_classifier import CommandClass, classify_command
 
 if TYPE_CHECKING:
@@ -36,16 +37,42 @@ class PolicyHook(Protocol):
 
 
 class SensitiveArgumentHook:
-    """Rejects arguments whose names look like credentials (spec §30, §32)."""
+    """Rejects credential-carrying arguments (spec §30, §32; Phase 9 values).
+
+    Denial triggers (key-shaped *or* value-shaped, never ordinary prose):
+    - an argument *name* that looks like a credential with a non-empty value;
+    - an `env` mapping entry whose key looks secret-shaped or whose value
+      matches a high-confidence secret format;
+    - a `command` argv item matching a high-confidence secret format (secret
+      material on a command line is visible to process listings and logs).
+    """
 
     def check(
         self, request: ToolRequest, tool: Tool, decision: ToolDecision
     ) -> tuple[ToolDecision, str | None]:
-        for name in request.arguments:
-            if is_secret_name(name) and request.arguments[name] not in (None, "", b""):
+        for name, value in request.arguments.items():
+            if is_secret_name(name) and value not in (None, "", b""):
                 return ToolDecision.DENY, (
                     f"argument {name!r} looks like a credential and is not allowed"
                 )
+        env = request.arguments.get("env")
+        if isinstance(env, dict):
+            for key, value in env.items():
+                if isinstance(key, str) and is_secret_name(key):
+                    return ToolDecision.DENY, (
+                        f"env key {key!r} looks like a credential and is not allowed"
+                    )
+                if isinstance(value, str) and looks_like_secret_value(value):
+                    return ToolDecision.DENY, (
+                        "env value looks like a credential and is not allowed"
+                    )
+        command = request.arguments.get("command")
+        if isinstance(command, list):
+            for item in command:
+                if isinstance(item, str) and looks_like_secret_value(item):
+                    return ToolDecision.DENY, (
+                        "command argument looks like a credential and is not allowed"
+                    )
         return decision, None
 
 
@@ -89,7 +116,10 @@ class PathSecurityHook:
                         f"{name} {path} is outside allowed roots: "
                         + ", ".join(str(root) for root in self._allowed)
                     )
-                if name == "path" and is_protected_path(path):
+                # Protected files are denied on *every* declared path argument
+                # (Phase 9): `shell.execute` declares `cwd`, not `path`, and a
+                # name-scoped check would silently skip it.
+                if is_protected_path(path):
                     return ToolDecision.DENY, (
                         f"{name} {path} targets a protected file"
                     )

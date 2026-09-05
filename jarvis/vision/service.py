@@ -20,6 +20,7 @@ from jarvis.configuration.model import JarvisConfig
 from jarvis.core.health import HealthRegistry, HealthStatus
 from jarvis.events.models import VISION_CAPTURED, VISION_DESCRIBED, VISION_FAILED, Event
 from jarvis.exceptions import VisionUnavailableError, VisionValidationError
+from jarvis.tools.redaction import redact_secrets
 from jarvis.vision.capture import CaptureManager, StubCaptureBackend
 from jarvis.vision.file_repository import FileVisionRepository
 from jarvis.vision.grounding import GroundingStub
@@ -181,7 +182,7 @@ class VisionService:
         except Exception as exc:
             self._publish(
                 VISION_FAILED,
-                {"reason": str(exc)[:200]},
+                {"reason": redact_secrets(str(exc)[:200])},
                 session_id=session_id,
                 task_id=task_id,
             )

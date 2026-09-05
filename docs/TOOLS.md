@@ -95,19 +95,32 @@ Rules:
 ### Hooks (they only tighten, never loosen)
 
 - **PathSecurityHook** (`jarvis/tools/pathsecurity.py`): canonicalizes every
-  argument named `path` (absolute/relative/`~` expansion), denies paths
+  declared path argument (absolute/relative/`~` expansion), denies paths
   outside `allowed_roots` or inside `denied_roots`, and denies access to
-  protected files: `memory.db`, `.env`, `.env.*`, and any path whose stem is
-  `secret`/`token`/`credential`/`api_key`/`password`/`private_key`.
-  Directories are never treated as protected.
+  protected files on **every** declared path argument (including
+  `shell.execute`'s `cwd`, Phase 9): `memory.db` (+ `-wal`/`-journal`/`-shm`
+  sidecars), `audit.log`, `jarvis.yaml`, `.env`, `.env.*`, `.envrc`, and any
+  path whose stem is `secret`/`token`/`credential`/`api_key`/`password`/
+  `private_key`. Committed templates (`.env.example`, `.env.sample`,
+  `.env.template`) stay readable. Directories are never treated as protected.
 - **ShellCommandHook** (`jarvis/tools/shell_classifier.py`): classifies the
   first token of a `shell.execute` command — `safe` / `restricted` /
   `dangerous` / `forbidden` — case- and `.exe`-insensitive. `safe` commands
   keep the risk, `restricted` escalate to `medium`, `dangerous` escalate to
   `high`, `forbidden` are denied outright (e.g. `format`, `diskpart`, `reg`,
-  `bcdedit`, `shutdown`, `del`/`rm`/`rmdir`, `format`).
-- **SensitiveArgumentHook**: denies arguments whose keys or values look like
-  credentials (`.env`-style markers, `api_key`, `password`, `token`, …).
+  `bcdedit`, `shutdown`, `del`/`rm`/`rmdir`, `format`). Phase 9: OS installers
+  (`msiexec`, `winget`, `choco`, `scoop`), script-host/LOLBin binaries
+  (`mshta`, `wscript`, `cscript`, `bitsadmin`, `schtasks`, `wevtutil`,
+  `regsvr32`, `cmstp`, `takeown`) are `dangerous`; obfuscated
+  `powershell -EncodedCommand` (`-enc`/`-ec`) is `forbidden`; `git config` is
+  `restricted` (credential-helper vector), not read-only.
+- **SensitiveArgumentHook**: denies arguments whose keys look like
+  credentials (`.env`-style markers, `api_key`, `password`, `token`, …) and —
+  Phase 9 — `env` mapping entries with secret-shaped keys *or*
+  high-confidence secret-format values, plus `command` argv items matching a
+  secret format (`jarvis/tools/redaction.py`). Ordinary prose is never denied;
+  only `sk-…`, `ghp_…`/`github_pat_…`, `xox…`, `AKIA…`, PEM private-key
+  blocks, and JWT-shaped values trigger.
 
 ## 5. Environment and Execution Bounds (`jarvis/tools/environment.py`)
 

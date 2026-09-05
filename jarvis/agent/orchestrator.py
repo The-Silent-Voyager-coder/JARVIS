@@ -121,7 +121,9 @@ class AgentOrchestrator:
                 "task_id": task.task_id,
                 "session_id": task.session_id,
                 "provider": task.provider,
-                "prompt": (context.prompt or "")[:200],
+                # Phase 9: prompt *content* never enters audit events
+                # (docs/AGENTS.md §9) — length only, for boundedness telemetry.
+                "prompt_chars": len(context.prompt or ""),
                 "max_steps": limits.max_steps,
                 "max_tool_calls": limits.max_tool_calls,
                 "max_wall_time_seconds": limits.max_wall_time_seconds,

@@ -50,6 +50,7 @@ from jarvis.tools.models import (
     validate_arguments,
 )
 from jarvis.tools.policy import SecurityPolicy
+from jarvis.tools.redaction import redact_secrets
 from jarvis.tools.registry import ToolRegistry
 
 log = logging.getLogger("jarvis.tools.service")
@@ -178,7 +179,8 @@ class ToolService:
             validate_arguments(request.arguments, tool.input_schema)
         except ToolValidationError as exc:
             self._publish(
-                TOOL_FAILED, _common_payload(request, tool, error=str(exc))
+                TOOL_FAILED,
+                _common_payload(request, tool, error=redact_secrets(str(exc))),
             )
             raise
         self._enforce_policy(request, tool)
@@ -205,6 +207,11 @@ class ToolService:
             request_id=request.request_id,
             duration_ms=round(duration_ms, 3),
         )
+        # Phase 9: tool stderr/exceptions can echo credential material
+        # (e.g. a failing curl with an embedded token); audit payloads and
+        # the returned result carry only the redacted form.
+        if result.error:
+            result = replace(result, error=redact_secrets(result.error))
         result = self._enforce_output_limit(result)
         if result.success:
             self._publish(
@@ -332,6 +339,12 @@ class ToolService:
         )
 
     def _publish(self, event_type: str, payload: dict[str, Any]) -> None:
+        # Phase 9: belt-and-braces — free-text audit fields never carry
+        # credential material, even if a future caller forgets to redact.
+        for key in ("error", "reason"):
+            value = payload.get(key)
+            if isinstance(value, str):
+                payload[key] = redact_secrets(value)
         if self.publisher is None:
             return
         try:

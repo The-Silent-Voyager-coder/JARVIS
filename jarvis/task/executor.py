@@ -16,6 +16,7 @@ from jarvis.task.limits import MAX_STEPS_CEILING
 from jarvis.task.models import StepResult, TaskRecord, TaskReport, TaskState
 from jarvis.task.repository import TaskRepository
 from jarvis.tools.models import ToolRequest
+from jarvis.tools.redaction import redact_secrets
 
 log = logging.getLogger("jarvis.task.executor")
 
@@ -245,7 +246,7 @@ class TaskExecutor:
         if self._publisher is None:
             return
         try:
-            self._publisher(Event(type="TaskStarted", source="task", task_id=task.id, payload={"plan_id": plan.id, "goal": plan.goal[:120], "total_steps": len(plan.steps)}))  # noqa: E501
+            self._publisher(Event(type="TaskStarted", source="task", task_id=task.id, payload={"plan_id": plan.id, "goal": redact_secrets(plan.goal[:120]), "total_steps": len(plan.steps)}))  # noqa: E501
         except Exception:
             pass
 
@@ -269,7 +270,7 @@ class TaskExecutor:
         if self._publisher is None:
             return
         try:
-            self._publisher(Event(type=TASK_STEP_FAILED, source="task", task_id=task.id, payload={"step_id": step.id, "sequence": step.sequence, "error": (result.error or "")[:200]}))  # noqa: E501
+            self._publisher(Event(type=TASK_STEP_FAILED, source="task", task_id=task.id, payload={"step_id": step.id, "sequence": step.sequence, "error": redact_secrets((result.error or "")[:200])}))  # noqa: E501
         except Exception:
             pass
 

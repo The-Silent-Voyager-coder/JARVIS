@@ -15,8 +15,38 @@ from pathlib import Path
 from jarvis.tools.environment import is_secret_name
 
 PROTECTED_FILENAMES = frozenset(
-    {"memory.db", "audit.log", "jarvis.yaml", "jarvis.example.yaml", ".env"}
+    {
+        "memory.db",
+        "audit.log",
+        "jarvis.yaml",
+        "jarvis.example.yaml",
+        ".env",
+        ".envrc",
+    }
 )
+
+#: Committed templates that carry no secrets stay readable (docs/TOOLS.md).
+PROTECTED_FILENAME_EXCEPTIONS = frozenset(
+    {".env.example", ".env.sample", ".env.template"}
+)
+
+#: SQLite sidecars of the protected memory database.
+_MEMORY_DB_SIDECARS = frozenset({"-journal", "-wal", "-shm"})
+
+
+def _is_protected_name(name: str) -> bool:
+    """Filename check: exact names, `.env.*` variants, sqlite sidecars."""
+    if name in PROTECTED_FILENAME_EXCEPTIONS:
+        return False
+    if name in PROTECTED_FILENAMES:
+        return True
+    if name.startswith(".env."):
+        return True
+    if name.startswith("memory.db") and any(
+        name == f"memory.db{suffix}" for suffix in _MEMORY_DB_SIDECARS
+    ):
+        return True
+    return False
 
 
 def canonicalize(path: str, base: Path) -> Path:
@@ -46,6 +76,6 @@ def is_protected_path(path: Path) -> bool:
     if path.is_dir():
         return False
     name = path.name.casefold()
-    if name in PROTECTED_FILENAMES:
+    if _is_protected_name(name):
         return True
     return is_secret_name(path.stem)

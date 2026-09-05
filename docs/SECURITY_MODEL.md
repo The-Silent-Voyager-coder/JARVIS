@@ -147,6 +147,59 @@ enforcement layer every tool execution passes through. Full contract:
 - **Phase 4 intentional absences.** No delete tool, no process-kill tool,
   and no `network`/`browser`/`gui` tools. §6 (permission manager with policy
   files, sandboxing, audit file) remains Phase 9 hardening scope.
+
+## 10. Phase 9 Hardening (implemented)
+
+Without changing the §2 risk vocabulary or the allow/ask/deny matrix:
+
+- **Secrets scrubbing.** `jarvis/tools/redaction.py` masks high-confidence
+  secret formats (`sk-…`, `ghp_…`/`github_pat_…`, `xox…`, `AKIA…`, PEM
+  private-key blocks, JWT-shaped tokens) in every free-text audit field:
+  tool errors (service `_publish` + returned `ToolResult.error`), delegation
+  summaries/errors/diffs/permission descriptions, planning goals/errors, and
+  task goals/step errors. Ordinary prose (e.g. the word "password" in docs)
+  is never masked or denied.
+- **Sensitive-value denial.** `SensitiveArgumentHook` additionally denies
+  `env` entries with secret-shaped keys or secret-format values and
+  `command` argv items carrying secret formats (command lines are visible to
+  process listings). Key-based denial is unchanged.
+- **Protected files.** `.env.*` (as documented), `.envrc`, and
+  `memory.db-wal`/`-journal`/`-shm` sidecars are now denied; committed
+  templates (`.env.example`/`.sample`/`.template`) stay readable. The check
+  applies to every declared path argument, closing the `shell.execute`
+  `cwd` gap.
+- **Command policy.** OS installers and LOLBin/persistence binaries are
+  `dangerous`; `powershell -EncodedCommand` is `forbidden`; `git config` is
+  no longer treated as read-only.
+- **Audit completeness.** `AGENT_STARTED` no longer publishes prompt content
+  (length only); delegation/task/planning payloads carry ids, counters,
+  reasons, and redacted text — prompts, full arguments, and secrets never
+  enter events. The verbatim `path` in
+  `DELEGATION_PERMISSION_REQUESTED` is intentional: approvers need the exact
+  target to decide.
+
+## 11. Voice / Vision Threat Model (contract for Phase 6–8 implementers)
+
+- **Microphone and screen are sensors, not inputs.** Capture (mic audio,
+  screenshots) requires explicit user enablement and is treated as at least
+  `ASK`-gated `READ`: no background capture, no capture inside delegated or
+  autonomous runs without a fresh approval.
+- **Transcripts and pixels are untrusted.** STT output and on-screen text
+  are attacker-influenced data (prompt injection via spoken/web content):
+  they enter the agent loop as `Message.user`-equivalent content, never as
+  instructions, and never flow into tool arguments without policy evaluation.
+- **Screenshots are secret-dense.** A screenshot can contain passwords, keys,
+  and personal data: screenshots and OCR-equivalent text are never written
+  to audit events or long-term memory without an explicit user save decision,
+  are bounded in retention, and pass through `redact_secrets` before any
+  persisted summary.
+- **Grounding actions are writes.** Any vision-grounded click/type/file
+  operation is classified at least `LOW_WRITE`/`HIGH_WRITE` (a click on
+  "Delete" is `HIGH_WRITE`) and goes through the standard
+  `ToolService.execute` pipeline — vision tools add no bypass.
+- **Local-first.** Voice/vision pipelines run on-machine with stdlib-only
+  code; no audio, transcript, or image leaves the machine without explicit
+  user approval per destination.
 ## 9. Agent Loop Security (Phase 5A)
 
 The agent loop never weakens the tool security pipeline:

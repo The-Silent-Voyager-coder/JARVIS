@@ -40,6 +40,7 @@ The authoritative in-repo policy is `docs/SECURITY_MODEL.md`:
 - No unrestricted filesystem, no blanket approvals, no `shell=True`, no automatic `git` operations.
 - Delegation (`jarvis/delegation`) is bounded: depth ≤1, wall-clock/output/permission/session limits, SSE reconnect limit = 3, prompts never in events, protected paths denied.
 - Secrets are env-only (`OPENCODE_API_KEY` via `api_key_env`), scrubbed from tool environments and logs.
+- Phase 9 hardening (`docs/SECURITY_MODEL.md` §10–§11): secret-format redaction of audit strings, sensitive-value denial (`env`/argv), `.env.*`/`.envrc`/sqlite-sidecar protection on all path args, tighter shell classification (installers, LOLBins, encoded PowerShell), no prompt content in agent events, voice/vision threat-model contract.
 
 See also `docs/TOOLS.md`, `docs/AGENTS.md`, `docs/CONFIGURATION.md`.
 

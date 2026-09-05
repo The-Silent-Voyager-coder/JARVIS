@@ -74,6 +74,7 @@ from jarvis.tools.models import (
 )
 from jarvis.tools.pathsecurity import canonicalize, is_protected_path, is_within
 from jarvis.tools.policy import SecurityPolicy
+from jarvis.tools.redaction import redact_secrets
 
 log = logging.getLogger("jarvis.delegation.manager")
 
@@ -580,7 +581,9 @@ class DelegationManager:
                                 "provider": provider.provider_id(),
                                 "state": status.state.value,
                                 "output_bytes": status.output_bytes,
-                                "progress": (event.message or "")[:_PROGRESS_EVENT_MAX],
+                                "progress": redact_secrets(
+                                    (event.message or "")[:_PROGRESS_EVENT_MAX]
+                                ),
                             },
                         )
                         if status.output_bytes > limits.max_output_bytes:
@@ -655,7 +658,10 @@ class DelegationManager:
             session_id=status.session_id or status.task_id,
             action=str(event.metadata.get("action") or "unknown").lower(),
             path=event.metadata.get("path") or None,
-            description=(event.message or "")[:_PROGRESS_EVENT_MAX] or None,
+            # Phase 9: executor messages can echo secrets; audit keeps the
+            # redacted form. `path` stays verbatim — approvers need the exact
+            # target to decide.
+            description=redact_secrets((event.message or "")[:_PROGRESS_EVENT_MAX]) or None,
         )
         category, risk = _classify_permission(permission.action)
         arguments: dict[str, Any] = {}
@@ -786,6 +792,11 @@ class DelegationManager:
                 diff_text = encoded[:budget]
                 if len(diff_text) == budget and budget < len(encoded):
                     diff_text += "\n[diff truncated]"
+            # Phase 9: delegated diffs can embed freshly written secrets
+            # (e.g. a key the executor placed in a file); stored results and
+            # audit payloads keep only the redacted form.
+            if diff_text is not None:
+                diff_text = redact_secrets(diff_text) or diff_text
         result = DelegationResult(
             task_id=task.task_id,
             request_id=task.request_id,
@@ -793,7 +804,7 @@ class DelegationManager:
             provider=provider.provider_id(),
             state=DelegationState.COMPLETED,
             provider_session_id=status.provider_session_id,
-            summary=summary,
+            summary=redact_secrets(summary),
             duration_ms=(time.monotonic() - started) * 1000.0,
             permission_requests=status.permission_requests,
             output_bytes=status.output_bytes,
@@ -829,6 +840,8 @@ class DelegationManager:
         error: str | None,
     ) -> DelegationResult:
         transition_state(status.state, DelegationState.FAILED)
+        # Phase 9: provider exceptions can echo secrets; store redacted form.
+        error = redact_secrets(error)
         status.error = error
         status.reason = reason
         if session_id:
@@ -952,7 +965,8 @@ class DelegationManager:
             "permission_id": None,
         }
         if reason:
-            payload["reason"] = reason[:_PROGRESS_EVENT_MAX]
+            redacted = redact_secrets(reason[:_PROGRESS_EVENT_MAX])
+            payload["reason"] = redacted
         if outcome:
             payload["outcome"] = outcome
         self._publish(event_type, payload)

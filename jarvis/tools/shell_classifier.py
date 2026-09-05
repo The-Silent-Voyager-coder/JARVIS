@@ -73,6 +73,23 @@ DANGEROUS_COMMANDS = frozenset(
         "pnputil",
         "netsh",
         "certutil",
+        # OS-level installers: arbitrary code execution outside the project
+        # (Phase 9: moved up from RESTRICTED so they always need approval).
+        "msiexec",
+        "winget",
+        "choco",
+        "scoop",
+        # Living-off-the-land binaries: script hosts, downloaders, task
+        # persistence, and ownership seizure (Phase 9).
+        "mshta",
+        "wscript",
+        "cscript",
+        "bitsadmin",
+        "schtasks",
+        "wevtutil",
+        "regsvr32",
+        "cmstp",
+        "takeown",
     }
 )
 
@@ -110,10 +127,6 @@ RESTRICTED_COMMANDS = frozenset(
         "poetry",
         "conda",
         "mamba",
-        "msiexec",
-        "winget",
-        "choco",
-        "scoop",
         "copy",
         "xcopy",
         "robocopy",
@@ -123,7 +136,6 @@ RESTRICTED_COMMANDS = frozenset(
         "mkdir",
         "attrib",
         "icacls",
-        "takeown",
         "cipher",
         "compact",
         "expand",
@@ -191,7 +203,8 @@ _GIT_READ_ONLY = frozenset(
         "branch",
         "remote",
         "tag",
-        "config",
+        # NOTE: `config` is deliberately NOT read-only (Phase 9): it can set
+        # credential helpers and arbitrary repo config, so it stays RESTRICTED.
         "help",
         "ls-files",
         "rev-parse",
@@ -231,12 +244,27 @@ def _classify_python(rest: Sequence[str]) -> CommandClass:
     return CommandClass.RESTRICTED
 
 
+#: Obfuscated-execution flags: base64-encoded PowerShell hides intent from
+#: review, so it is forbidden outright (Phase 9). `-e` alone is NOT matched
+#: (too many benign meanings); only the explicit encoded-command spellings.
+_ENCODED_PS_FLAGS = frozenset({"-encodedcommand", "-enc", "-ec"})
+
+
+def _has_encoded_flag(rest: Sequence[str]) -> bool:
+    return any(
+        isinstance(item, str) and item.casefold() in _ENCODED_PS_FLAGS
+        for item in rest
+    )
+
+
 def classify_command(command: Sequence[str]) -> CommandClass:
     """Classify a command vector; conservative default for unknowns."""
     if not command:
         return CommandClass.FORBIDDEN
     exe = _exe_name(command)
     if exe in FORBIDDEN_COMMANDS:
+        return CommandClass.FORBIDDEN
+    if exe in ("powershell", "pwsh") and _has_encoded_flag(command[1:]):
         return CommandClass.FORBIDDEN
     if exe in SHELL_LAUNCHERS:
         return CommandClass.DANGEROUS
