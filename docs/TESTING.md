@@ -189,3 +189,30 @@ Coverage:
   run` with a scripted mock provider (one safe tool call, then final text),
   empty-prompt → exit 2, offline no-provider → exit 1, `--max-steps 1` →
   `limit_reached` exit 1.
+## 6d. Phase 6 baseline (workspace / planning / task + CLI wiring)
+
+- New suites: `tests/unit/workspace/` (models, scanner — depth/entry caps,
+  timeout, entry-point detection), `tests/unit/planning/` (models incl.
+  1..n sequence validation, deterministic planner incl. unknown-tool
+  allow-list), `tests/unit/task/` (models, SQLite repository, bounded
+  executor — unknown-tool denial, protected-path denial, timeouts),
+  `tests/integration/test_cli_workspace_task.py` (scan/info/health,
+  plan-file run/list/get round-trip, denial paths),
+  `tests/integration/test_task_integration.py`,
+  `tests/integration/test_cli_planning.py` (`planning create/get/list/
+  health` — JSON + text output, empty-goal → exit 2, unknown id → exit 1,
+  workspace-context attach, invalid config → exit 2).
+- Key behaviors proven end-to-end through the real CLI: plan steps execute
+  only via the Phase 4 tool pipeline (approval/policy denials hold);
+  `workspace scan` outside allowed roots → exit 2; disabled subsystems
+  report healthy no-op + clean `unavailable` failures.
+- Packaging regression note: `tests/` must be a regular package
+  (`__init__.py` in every test directory). Without it, an unrelated
+  third-party `tests` bundle in `site-packages` shadows the local
+  namespace-package `tests/` dir (regular packages win over namespace
+  portions) and all `from tests.…` imports fail at collection with
+  `ModuleNotFoundError: No module named 'tests.unit'`.
+- Version regression note: `jarvis --version` reports the source
+  `jarvis.__version__` as authoritative — a stale or unrelated installed
+  distribution reusing the `jarvis` dist name must not mislabel running
+  code (covered by `tests/integration/test_cli.py::test_version`).

@@ -81,7 +81,10 @@ Phase 5A adds the bounded, auditable AI↔tool loop on top of all four layers:
   regression), offline CLI integration suite, scripted mock-provider
   tool-call tests; ruff + mypy clean
 
-**Not yet implemented**: Voice, vision, unattended autonomy, HUD, and semantic-memory ingestion — OpenCode delegation is now implemented (Phase 5B).
+**Not yet implemented**: unattended autonomy (Phase 7), security hardening
+(Phase 9), and semantic-memory ingestion — voice (Phase 6), vision
+(Phase 8), HUD (Phase 10), and OpenCode delegation (Phase 5B) are
+implemented.
 
 ## Current Status (Phase 5B)
 
@@ -107,11 +110,11 @@ Phase 5B adds controlled OpenCode delegation under full JARVIS authority:
 | 5A | Agent loop (bounded AI↔tool, limits, approval, cancellation) | **Done** |
 | 5B | Controlled OpenCode delegation (DelegationManager, secure permission routing, bounded SSE) | **Done** |
 | 5 | OpenCode integration | **Done** (delivered via 5B delegation layer) |
-| 6 | Voice (wake word, STT, TTS) | Not started |
+| 6 | Workspace/planning/task foundation + voice pipeline (wake word, STT, TTS) | **Done** |
 | 7 | Autonomy (planner, task graph, verification) | Not started |
-| 8 | Vision | Not started |
+| 8 | Vision (bounded capture, OCR-free grounding, permissioned tools) | **Done** |
 | 9 | Security hardening | Not started |
-| 10 | HUD interface | Not started |
+| 10 | HUD interface (local-first status/dashboard) | **Done** |
 
 ## Repository Layout
 
@@ -129,7 +132,13 @@ jarvis/
 │   ├── tools/           → tool registry, security policy, built-in tools (Phase 4)
 │   ├── agent/           → bounded tool loop, limits, approval, events (Phase 5A)
 │   ├── delegation/      → controlled OpenCode delegation, limits, manager, service (Phase 5B)
-│   └── ...              → voice, autonomy (later phases)
+│   ├── workspace/       → workspace discovery, scanner, persistence (Phase 6)
+│   ├── planning/        → deterministic plan decomposition, no AI calls (Phase 6)
+│   ├── task/            → bounded multi-step execution over the tool pipeline (Phase 6)
+│   ├── voice/           → wake word, STT, TTS local-first pipeline (Phase 6)
+│   ├── vision/          → bounded capture, grounding, permissioned tools (Phase 8)
+│   ├── interface/       → local-first HUD status/dashboard (Phase 10)
+│   └── ...              → autonomy (Phase 7, later)
 ├── tests/           → test suite (per-module subdirectories)
 ├── .env.example     → secret template (real secrets never committed)
 └── pyproject.toml   → project metadata; PyYAML is the only runtime dependency
@@ -219,9 +228,8 @@ Memory content is shown only with `--content`; every command supports
 
 ## Non-Goals (now)
 
-- UI/HUD, animations, decorative interfaces (Phase 10)
-- Voice pipeline (Phase 6)
-- Vision (Phase 8)
+- Decorative interfaces and animations (HUD ships read-only status/dashboard only — Phase 10)
+- Cloud/paid voice, vision, or model services (all pipelines are local-first, zero-cost)
 - Unattended multi-agent orchestration (Phase 7; the Phase 5A loop is
   single-run and user-initiated)
 - Unbounded autonomy (delegation is bounded: depth 1, 30 min wall-clock, 4 MiB output, 50 permissions, 3 sessions)

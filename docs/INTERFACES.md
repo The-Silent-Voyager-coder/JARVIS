@@ -633,3 +633,66 @@ jarvis agent run --prompt TEXT [--session-id SID] [--provider NAME]
 
 Exit codes: `0` completed run / healthy; `1` failure (unavailable provider,
 runtime failure, non-completed state); `2` invalid prompt/configuration.
+
+## 12. Workspace / Planning / Task Interfaces (Phase 6)
+
+Deterministic, offline, stdlib-only. Plans never call an AI provider;
+tasks execute plan steps exclusively through the Phase 4 tool pipeline
+(same allow/ask/deny + audit semantics as `tools execute`).
+
+```python
+class WorkspaceService:   # jarvis/workspace/service.py
+    def scan(self, root: str | None = None) -> dict: ...
+    def info(self, workspace_id: str | None = None,
+             root: str | None = None) -> dict | None: ...
+    def health(self) -> dict: ...   # available/status/enabled/detail
+
+class PlanningService:    # jarvis/planning/service.py
+    def create_plan(self, goal: str, workspace: Any = None,
+                    plan_id: str | None = None) -> dict: ...
+    def get(self, plan_id: str) -> dict | None: ...
+    def list(self) -> list[dict]: ...
+    def health(self) -> dict: ...   # available/status/enabled/detail
+
+class TaskService:        # jarvis/task/service.py
+    def run(self, plan: str) -> TaskReport: ...     # plan file (.yaml/.json) or plan_id
+    def resume(self, task_id: str) -> TaskReport: ...
+    def list(self, limit: int = 50) -> list[dict]: ...
+    def get(self, task_id: str) -> dict: ...
+    def cancel(self, task_id: str) -> dict: ...
+    def health(self) -> dict: ...   # available/status/enabled/detail
+```
+
+### CLI
+
+```text
+jarvis workspace scan [PATH] [--config PATH] [--json]
+jarvis workspace info [--id ID] [--path PATH] [--config PATH] [--json]
+jarvis workspace health [--config PATH] [--json]
+jarvis planning create GOAL [--workspace-id ID] [--workspace-root PATH]
+                     [--plan-id ID] [--config PATH] [--json]
+jarvis planning get <plan_id> [--config PATH] [--json]
+jarvis planning list [--config PATH] [--json]
+jarvis planning health [--config PATH] [--json]
+jarvis task run PLAN [--config PATH] [--json]
+jarvis task resume <task_id> [--config PATH] [--json]
+jarvis task list [--limit N] [--config PATH] [--json]
+jarvis task get <task_id> [--config PATH] [--json]
+jarvis task cancel <task_id> [--config PATH] [--json]
+jarvis task health [--config PATH] [--json]
+```
+
+Exit codes: `0` success / healthy / completed; `1` not-found, unavailable
+subsystem, or non-completed task state; `2` invalid input/configuration
+(empty goal/plan id, scan outside allowed roots, malformed plan file).
+
+### Phases 7–10 status (integration notes)
+
+- Phase 8 (vision) and Phase 10 (HUD) CLIs are merged
+  (`jarvis vision health|capture|describe`, `jarvis hud|status|dashboard`);
+  vision has no `vision.*` config section yet — the service is
+  config-independent (see merge-risk notes in the Phase 6–10 QA report).
+- Phase 6 voice pipeline CLI is merged (`jarvis voice health|listen|speak`).
+- Phase 7 (autonomy: planner + task-graph + verification on top of
+  `jarvis/planning` + `jarvis/task`) and Phase 9 (security hardening)
+  contracts are TODO — owned by their phase leads.

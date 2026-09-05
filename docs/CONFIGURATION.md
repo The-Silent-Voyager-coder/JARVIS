@@ -243,3 +243,45 @@ Environment override convention: `JARVIS_AGENT__MAX_STEPS`,
 
 CLI: `jarvis agent health|run [--config PATH] [--json]`. See
 `docs/AGENTS.md` for the full agent-system contract.
+## 11. Workspace / Planning / Task Sections (Phase 6)
+
+```yaml
+workspace:
+  enabled: true
+  max_scan_depth: 3
+  max_entries: 500
+  scan_timeout_seconds: 10.0
+  database_path: C:/JARVIS/data/workspace.db
+planning:
+  enabled: true
+  max_plan_steps: 25
+  database_path: C:/JARVIS/data/plans.db
+task:
+  enabled: true
+  max_steps: 25
+  per_step_timeout_seconds: 30.0
+  total_timeout_seconds: 600.0
+  database_path: C:/JARVIS/data/tasks.db
+```
+
+Rules:
+
+- Limits are validated with hard ceilings in `jarvis/configuration/
+  validation.py` (via `jarvis/workspace/limits.py`,
+  `jarvis/planning/limits.py`, `jarvis/task/limits.py`); configuration
+  above a ceiling is refused at startup.
+- `enabled: false` gates the whole subsystem (healthy no-op in
+  `jarvis health`; commands fail cleanly with an "unavailable" message).
+
+Environment override convention: `JARVIS_WORKSPACE__MAX_ENTRIES`,
+`JARVIS_PLANNING__MAX_PLAN_STEPS`, `JARVIS_TASK__MAX_STEPS`.
+
+CLI: `jarvis workspace scan|info|health`, `jarvis planning
+create|get|list|health`, `jarvis task run|resume|list|get|cancel|health`
+(see `docs/INTERFACES.md` §12).
+
+Note: the Phase 6 voice pipeline adds a `voice:` section (wake_word / stt
+/ tts engine + model selections, see `config/jarvis.example.yaml`).
+Vision (Phase 8) currently defines no `vision.*` config keys — its
+service is config-independent. Phase 7 (autonomy) and Phase 9 (security)
+add no new config sections yet.

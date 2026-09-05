@@ -497,6 +497,47 @@ exposes `run(prompt, ...)`/`cancel()`/`health()`, registers the `agent`
 runtime health check (`available`/`status`/`enabled`/`detail`/`current`),
 and publishes `AGENT_*` events with exactly one terminal state per failure.
 
+## 5.5 Workspace / Planning / Task Layer (Phase 6)
+
+Phase 6 adds the execution substrate that Phase 7 autonomy will build on:
+workspace discovery (`jarvis/workspace/`), deterministic plan decomposition
+(`jarvis/planning/` — template/rule based, **no AI provider calls**), and
+bounded multi-step task execution (`jarvis/task/` — steps run exclusively
+through the Phase 4 tool pipeline, so allow/ask/deny, scope checks, and
+audit entries apply unchanged).
+
+```text
+jarvis/workspace/     models, limits, scanner (depth/entry caps, timeout),
+                      SQLite repository, service facade (scan/info/health)
+jarvis/planning/      models (Plan/Step, 1..n sequence validation),
+                      limits (max_plan_steps + ceiling), deterministic
+                      Planner (goal-clause → known-safe tool mapping),
+                      SQLite repository, service facade
+                      (create_plan/get/list/health)
+jarvis/task/          models (TaskReport, TaskState machine), limits,
+                      cancellation, executor (per-step + total timeouts,
+                      unknown-tool and protected-path denial),
+                      SQLite repository, service facade
+                      (run/resume/list/get/cancel/health)
+```
+
+Runtime wiring (`jarvis/core/runtime.py`): the Runtime owns all three
+services, starts them from `workspace:`/`planning:`/`task:` config blocks
+(enabled-gated, ceiling-validated), registers `workspace`/`planning`/`task`
+health checks, and exposes them as `runtime.workspace/planning/task` for
+the CLI. Shutdown order is task → planning → workspace. CLI surface:
+`jarvis workspace|planning|task …` (see `docs/INTERFACES.md` §12).
+
+Boundaries: the planner never emits unknown tool IDs (fixed allow-list
+mirroring the Phase 4 registry) and never executes anything — execution
+belongs to the task executor. Phase 7 (autonomy) will add the planner +
+task-graph + verification loop on top; it must not bypass these facades.
+
+Phases 6 (voice), 8 (vision), 10 (HUD) ship as sibling subsystems with
+their own CLIs (`jarvis voice|vision|hud …`); vision currently has no
+`vision.*` config section (config-independent service — see integration
+notes). Phase 9 (security hardening) is TODO.
+
 ## 6. Event System
 
 All module-to-module coupling that is not a direct service call goes through
