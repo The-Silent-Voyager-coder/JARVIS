@@ -25,6 +25,14 @@ Commands:
     jarvis delegation list [--config PATH]     running tasks then recent results
     jarvis delegation get <task_id> [--config PATH]  snapshot of one task
     jarvis delegation cancel <task_id> [--config PATH]  cancel a running task
+    jarvis planning create --goal TEXT [--workspace PATH]  deterministic plan
+    jarvis planning get <plan_id> [--config PATH]  show one plan
+    jarvis planning list [--config PATH]  list stored plans
+    jarvis planning verify <plan_id> [--config PATH]  static check, no execution
+    jarvis planning approve <plan_id> [--config PATH]  human gate: draft→ready
+    jarvis planning health [--config PATH]  planning subsystem health
+    jarvis task run PLAN [--approve] [--verify-only]  bounded plan execution
+            (verification first via verify-only; approval recorded, never assumed)
     jarvis hud|status|dashboard [--config PATH]  read-only HUD (local-first,
             zero-cost status/dashboard over health, memory, agent,
             delegation, workspace, planning, task)
@@ -69,6 +77,8 @@ from jarvis.exceptions import (
     MemoryError,
     MemoryNotFoundError,
     MemoryValidationError,
+    PlanningUnavailableError,
+    PlanningValidationError,
     ProviderCapabilityError,
     TaskUnavailableError,
     TaskValidationError,
@@ -370,6 +380,8 @@ def _build_parser() -> argparse.ArgumentParser:
     task_run.add_argument("plan", metavar="PLAN", help="plan file (.yaml/.json) or plan_id")
     task_run.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
     task_run.add_argument("--json", action="store_true", help="machine-readable output")
+    task_run.add_argument("--approve", action="store_true", help="record explicit human approval for this run (required before high-risk steps are trusted; never assumed)")  # noqa: E501
+    task_run.add_argument("--verify-only", action="store_true", help="statically verify the plan and exit without executing any tool")  # noqa: E501
 
     task_resume = task_sub.add_parser("resume", help="resume a paused task")
     task_resume.add_argument("task_id", metavar="TASK_ID", help="task id to resume")
@@ -394,6 +406,38 @@ def _build_parser() -> argparse.ArgumentParser:
     task_health = task_sub.add_parser("health", help="task subsystem health")
     task_health.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
     task_health.add_argument("--json", action="store_true", help="machine-readable output")
+
+    planning_parser = subparsers.add_parser("planning", help="planning commands")
+    planning_sub = planning_parser.add_subparsers(dest="planning_command", metavar="SUBCOMMAND")  # noqa: E501
+
+    planning_create = planning_sub.add_parser("create", help="create a deterministic plan from a goal")  # noqa: E501
+    planning_create.add_argument("--goal", metavar="TEXT", required=True, help="goal to decompose into steps")  # noqa: E501
+    planning_create.add_argument("--workspace", metavar="PATH", default=None, help="workspace root for file-targeted steps")  # noqa: E501
+    planning_create.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    planning_create.add_argument("--json", action="store_true", help="machine-readable output")
+
+    planning_get = planning_sub.add_parser("get", help="get a plan by id")
+    planning_get.add_argument("plan_id", metavar="PLAN_ID", help="plan id")
+    planning_get.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    planning_get.add_argument("--json", action="store_true", help="machine-readable output")
+
+    planning_list = planning_sub.add_parser("list", help="list stored plans")
+    planning_list.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    planning_list.add_argument("--json", action="store_true", help="machine-readable output")
+
+    planning_verify = planning_sub.add_parser("verify", help="statically verify a plan (no tool execution)")  # noqa: E501
+    planning_verify.add_argument("plan_id", metavar="PLAN_ID", help="plan id")
+    planning_verify.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    planning_verify.add_argument("--json", action="store_true", help="machine-readable output")
+
+    planning_approve = planning_sub.add_parser("approve", help="human gate: verify then move a draft plan to ready")  # noqa: E501
+    planning_approve.add_argument("plan_id", metavar="PLAN_ID", help="plan id")
+    planning_approve.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    planning_approve.add_argument("--json", action="store_true", help="machine-readable output")
+
+    planning_health = planning_sub.add_parser("health", help="planning subsystem health")
+    planning_health.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    planning_health.add_argument("--json", action="store_true", help="machine-readable output")
 
     for hud_command, hud_help in (
         ("hud", "read-only HUD dashboard (all sections)"),
@@ -1310,7 +1354,23 @@ def _cmd_task_run(args: argparse.Namespace) -> int:
         return EXIT_INVALID
     try:
         try:
-            report = runtime.task.run(args.plan)
+            if args.verify_only:
+                data = runtime.task.verify_plan(args.plan)
+                ok = bool(data.get("ok", False))
+                if args.json:
+                    print(json.dumps(data, indent=2))
+                    return EXIT_OK if ok else EXIT_FAILURE
+                print("J.A.R.V.I.S. Task Verify")
+                print(f"  plan_id  {data.get('plan_id', '-')}")
+                print(f"  ok       {ok}")
+                for err in data.get("errors", []):
+                    print(f"  error    {err}")
+                for warn in data.get("warnings", []):
+                    print(f"  warning  {warn}")
+                if data.get("requires_approval"):
+                    print(f"  approval {', '.join(data['requires_approval'])}")
+                return EXIT_OK if ok else EXIT_FAILURE
+            report = runtime.task.run(args.plan, approved=args.approve)
         except TaskValidationError as exc:
             print(f"jarvis task run: {exc}", file=sys.stderr)
             return EXIT_INVALID
@@ -1461,6 +1521,175 @@ def _cmd_task_health(args: argparse.Namespace) -> int:
         print(json.dumps(data, indent=2))
         return EXIT_OK if data.get("available", False) else EXIT_FAILURE
     print("J.A.R.V.I.S. Task Health")
+    print(f"  status    {data.get('status','unknown')}")
+    print(f"  available {data.get('available', False)}")
+    print(f"  enabled   {data.get('enabled','-')}")
+    print(f"  detail    {data.get('detail') or ''}")
+    return EXIT_OK if data.get("available", False) else EXIT_FAILURE
+
+
+# --- planning --------------------------------------------------------------
+
+
+def _cmd_planning_create(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            workspace = {"root": args.workspace} if args.workspace else None
+            data = runtime.planning.create_plan(args.goal, workspace)
+        except PlanningValidationError as exc:
+            print(f"jarvis planning create: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+        except PlanningUnavailableError as exc:
+            print(f"jarvis planning create: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Plan")
+    print(f"  plan_id  {data.get('id', '-')}")
+    print(f"  goal     {data.get('goal', '-')}")
+    print(f"  status   {data.get('status', '-')}")
+    for step in data.get("steps", []):
+        print(f"    {step.get('sequence', '-')}: {step.get('tool_id', '-')} {step.get('description', '')[:60]}")  # noqa: E501
+    return EXIT_OK
+
+
+def _cmd_planning_get(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            data = runtime.planning.get(args.plan_id)
+        except PlanningUnavailableError as exc:
+            print(f"jarvis planning get: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if data is None:
+        print(f"jarvis planning get: plan not found: {args.plan_id}", file=sys.stderr)
+        return EXIT_INVALID
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Plan")
+    for key, value in data.items():
+        if key == "steps":
+            print(f"  steps: {len(value)} step(s)")
+            for step in value[:10]:
+                print(f"    {step.get('sequence', '-')}: {step.get('tool_id', '-')} {step.get('description', '')[:60]}")  # noqa: E501
+        else:
+            print(f"  {key:<14} {value}")
+    return EXIT_OK
+
+
+def _cmd_planning_list(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            items = runtime.planning.list()
+        except PlanningUnavailableError as exc:
+            print(f"jarvis planning list: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(items, indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Plans")
+    if not items:
+        print("  (none)")
+    for item in items:
+        print(f"  {item.get('id', '-'):<36} {item.get('status', '-'):<12} {len(item.get('steps', [])):>3} steps {item.get('goal', '')[:40]}")  # noqa: E501
+    return EXIT_OK
+
+
+def _cmd_planning_verify(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            data = runtime.planning.verify(args.plan_id)
+        except PlanningValidationError as exc:
+            print(f"jarvis planning verify: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+        except PlanningUnavailableError as exc:
+            print(f"jarvis planning verify: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    ok = bool(data.get("ok", False))
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK if ok else EXIT_FAILURE
+    print("J.A.R.V.I.S. Plan Verify")
+    print(f"  plan_id  {data.get('plan_id', '-')}")
+    print(f"  ok       {ok}")
+    for err in data.get("errors", []):
+        print(f"  error    {err}")
+    for warn in data.get("warnings", []):
+        print(f"  warning  {warn}")
+    if data.get("requires_approval"):
+        print(f"  approval {', '.join(data['requires_approval'])}")
+    return EXIT_OK if ok else EXIT_FAILURE
+
+
+def _cmd_planning_approve(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            data = runtime.planning.approve(args.plan_id)
+        except PlanningValidationError as exc:
+            print(f"jarvis planning approve: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+        except PlanningUnavailableError as exc:
+            print(f"jarvis planning approve: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Plan Approved")
+    print(f"  plan_id  {data.get('id', '-')}")
+    print(f"  status   {data.get('status', '-')}")
+    return EXIT_OK
+
+
+def _cmd_planning_health(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        data = runtime.planning.health()
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK if data.get("available", False) else EXIT_FAILURE
+    print("J.A.R.V.I.S. Planning Health")
     print(f"  status    {data.get('status','unknown')}")
     print(f"  available {data.get('available', False)}")
     print(f"  enabled   {data.get('enabled','-')}")
@@ -1832,6 +2061,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.task_command == "health":
             return _cmd_task_health(args)
         parser.error("task requires a subcommand: run, resume, list, get, cancel, health")
+    if args.command == "planning":
+        if args.planning_command == "create":
+            return _cmd_planning_create(args)
+        if args.planning_command == "get":
+            return _cmd_planning_get(args)
+        if args.planning_command == "list":
+            return _cmd_planning_list(args)
+        if args.planning_command == "verify":
+            return _cmd_planning_verify(args)
+        if args.planning_command == "approve":
+            return _cmd_planning_approve(args)
+        if args.planning_command == "health":
+            return _cmd_planning_health(args)
+        parser.error("planning requires a subcommand: create, get, list, verify, approve, health")
     if args.command == "hud":
         return _cmd_hud(args, compact=False)
     if args.command == "status":

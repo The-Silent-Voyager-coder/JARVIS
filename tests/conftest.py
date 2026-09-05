@@ -9,7 +9,14 @@ import pytest
 
 @pytest.fixture
 def valid_config_yaml(tmp_path: Path) -> Path:
-    """A minimal, valid configuration file pointing at the tmp data root."""
+    """A minimal, valid configuration file pointing at the tmp data root.
+
+    Every filesystem-writing path (all database_path values, audit log,
+    tool roots) is pinned under tmp_path. Never rely on loader defaults
+    here: they resolve to the shared C:/JARVIS/data root and tests must
+    not touch it (shared-dev-DB incident: a stray migration against the
+    shared tasks.db broke every runtime boot).
+    """
     path = tmp_path / "jarvis.yaml"
     d = str(tmp_path).replace("\\", "/")
     path.write_text(
@@ -33,6 +40,36 @@ memory:
   auto_save_conversations: false
   default_confidence: 0.8
   retention_days: 365
+tools:
+  working_directory: "{d}/workspaces"
+  allowed_roots: ["{d}"]
+  denied_roots: []
+  terminal:
+    default_risk: "LOW_WRITE"
+  browser:
+    default_risk: "READ"
+workspace:
+  enabled: true
+  max_scan_depth: 3
+  max_entries: 500
+  scan_timeout_seconds: 10.0
+  database_path: "{d}/data/workspace.db"
+planning:
+  enabled: true
+  max_plan_steps: 25
+  database_path: "{d}/data/plans.db"
+task:
+  enabled: true
+  max_steps: 25
+  per_step_timeout_seconds: 30.0
+  total_timeout_seconds: 600.0
+  database_path: "{d}/data/tasks.db"
+security:
+  mode: "normal"
+  default_mode: "ask"
+  allow_auto_approve_read: true
+  destructive_confirm: true
+  audit_log: "{d}/data/audit.log"
 """,
         encoding="utf-8",
     )

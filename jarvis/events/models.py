@@ -86,6 +86,8 @@ WORKSPACE_SCANNED = "WorkspaceScanned"
 WORKSPACE_SCAN_FAILED = "WorkspaceScanFailed"
 PLAN_CREATED = "PlanCreated"
 PLAN_FAILED = "PlanFailed"
+PLAN_VERIFIED = "PlanVerified"
+PLAN_APPROVED = "PlanApproved"
 TASK_STEP_STARTED = "TaskStepStarted"
 TASK_STEP_COMPLETED = "TaskStepCompleted"
 TASK_STEP_FAILED = "TaskStepFailed"
@@ -167,6 +169,8 @@ DOCUMENTED_EVENT_TYPES: frozenset[str] = frozenset(
         WORKSPACE_SCAN_FAILED,
         PLAN_CREATED,
         PLAN_FAILED,
+        PLAN_VERIFIED,
+        PLAN_APPROVED,
         TASK_STEP_STARTED,
         TASK_STEP_COMPLETED,
         TASK_STEP_FAILED,

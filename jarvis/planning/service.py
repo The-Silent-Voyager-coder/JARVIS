@@ -7,10 +7,12 @@ from typing import Any
 
 from jarvis.configuration.model import JarvisConfig
 from jarvis.core.health import HealthRegistry, HealthStatus
-from jarvis.events.models import PLAN_CREATED, PLAN_FAILED, Event
+from jarvis.events.models import PLAN_APPROVED, PLAN_CREATED, PLAN_FAILED, PLAN_VERIFIED, Event
 from jarvis.exceptions import PlanningUnavailableError, PlanningValidationError
+from jarvis.planning.models import PlanStatus
 from jarvis.planning.planner import Planner
 from jarvis.planning.sqlite_repository import SqlitePlanningRepository
+from jarvis.planning.verify import VerificationReport, verify_plan
 from jarvis.tools.redaction import redact_secrets
 
 log = logging.getLogger("jarvis.planning.service")
@@ -88,6 +90,66 @@ class PlanningService:
         assert self._repository is not None
         plan = self._repository.get(plan_id)
         return plan.to_dict() if plan else None
+
+    def verify(self, plan_id: str) -> dict[str, Any]:
+        """Statically verify a stored plan (Phase 7, no tool execution)."""
+        self._require_available()
+        assert self._repository is not None
+        assert self._config is not None
+        plan = self._repository.get(plan_id)
+        if plan is None:
+            raise PlanningValidationError(f"plan not found: {plan_id}")
+        report: VerificationReport = verify_plan(
+            plan, max_steps=self._config.planning.max_plan_steps
+        )
+        self._publish(PLAN_VERIFIED, {
+            "plan_id": plan.id,
+            "ok": report.ok,
+            "errors": len(report.errors),
+            "warnings": len(report.warnings),
+            "requires_approval": list(report.requires_approval),
+        })
+        return report.to_dict()
+
+    def approve(self, plan_id: str) -> dict[str, Any]:
+        """Human gate: verify, then move a DRAFT plan to READY (Phase 7).
+
+        Only DRAFT plans can be approved; verification must pass first.
+        Fails closed — no auto-approval, no silent state change.
+        """
+        import dataclasses
+        from datetime import UTC, datetime
+
+        self._require_available()
+        assert self._repository is not None
+        assert self._config is not None
+        plan = self._repository.get(plan_id)
+        if plan is None:
+            raise PlanningValidationError(f"plan not found: {plan_id}")
+        if plan.status != PlanStatus.DRAFT:
+            raise PlanningValidationError(
+                f"plan {plan_id} is {plan.status.value}, only draft plans can be approved"
+            )
+        report = verify_plan(plan, max_steps=self._config.planning.max_plan_steps)
+        if not report.ok:
+            self._publish(PLAN_FAILED, {
+                "plan_id": plan.id,
+                "error": "; ".join(report.errors)[:200],
+                "phase": "approve",
+            })
+            raise PlanningValidationError(
+                "plan failed verification: " + "; ".join(report.errors)[:300]
+            )
+        approved = dataclasses.replace(
+            plan, status=PlanStatus.READY, updated_at=datetime.now(UTC)
+        )
+        self._repository.save(approved)
+        self._publish(PLAN_APPROVED, {
+            "plan_id": plan.id,
+            "steps": len(plan.steps),
+            "requires_approval": list(report.requires_approval),
+        })
+        return approved.to_dict()
 
     def list(self) -> list[dict[str, Any]]:
         self._require_available()

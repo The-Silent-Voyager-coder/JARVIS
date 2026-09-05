@@ -9,7 +9,13 @@ from datetime import UTC, datetime
 from typing import Any
 
 from jarvis.events.models import TASK_STEP_COMPLETED, TASK_STEP_FAILED, TASK_STEP_STARTED, Event
-from jarvis.exceptions import TaskCancelledError, TaskLimitError, TaskTimeoutError
+from jarvis.exceptions import (
+    TaskCancelledError,
+    TaskLimitError,
+    TaskTimeoutError,
+    TaskValidationError,
+)
+from jarvis.planning.graph import topological_order
 from jarvis.planning.models import Plan, Step
 from jarvis.task.cancellation import CancellationToken
 from jarvis.task.limits import MAX_STEPS_CEILING
@@ -61,15 +67,28 @@ class TaskExecutor:
 
         # Load existing results for resume case (if any)
         existing = self._repository.get_step_results(task.id)
+        completed_ids: set[str] = set()
         if existing:
             step_results = list(existing)
+            completed_ids = {r.step_id for r in step_results}
             completed = sum(1 for r in step_results if r.success)
             failed = sum(1 for r in step_results if not r.success)
             task.current_step = len(step_results)
 
-        for step in plan.steps:
-            # Skip already completed steps for resume
-            if step.sequence <= task.current_step:
+        # Phase 7 task-graph: execute in dependency order. Linear Phase 6
+        # plans (empty depends_on) come back in sequence order unchanged.
+        try:
+            ordered_steps = topological_order(plan.steps)
+        except Exception as exc:
+            task.error = f"task graph invalid: {exc}"
+            task.transition(TaskState.FAILED)
+            self._repository.update_task(task)
+            raise TaskValidationError(task.error) from exc
+
+        for step in ordered_steps:
+            # Skip already completed steps for resume (id-based: topo order
+            # may differ from sequence order for DAG plans).
+            if step.id in completed_ids:
                 continue
             # Bounds checks
             if len(step_results) >= MAX_STEPS_CEILING:
@@ -93,7 +112,8 @@ class TaskExecutor:
             result = self._execute_step(task, plan, step, cancellation, per_step_timeout, started_wall)  # noqa: E501
             step_results.append(result)
             self._repository.save_step_result(task.id, result)
-            task.current_step = step.sequence
+            # Count-based progress (sequence-based breaks under topo order).
+            task.current_step = len(step_results)
             task.updated_at = datetime.now(UTC)
             # Persist after each step (resumable)
             self._repository.update_task(task)
@@ -246,7 +266,7 @@ class TaskExecutor:
         if self._publisher is None:
             return
         try:
-            self._publisher(Event(type="TaskStarted", source="task", task_id=task.id, payload={"plan_id": plan.id, "goal": redact_secrets(plan.goal[:120]), "total_steps": len(plan.steps)}))  # noqa: E501
+            self._publisher(Event(type="TaskStarted", source="task", task_id=task.id, payload={"plan_id": plan.id, "goal": redact_secrets(plan.goal[:120]), "total_steps": len(plan.steps), "approved": bool(task.metadata.get("human_approved", False))}))  # noqa: E501
         except Exception:
             pass
 

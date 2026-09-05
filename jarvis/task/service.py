@@ -130,7 +130,13 @@ class TaskService:
             raise TaskValidationError(f"plan not found: {plan_ref}")
         return plan
 
-    def run(self, plan: str | Path | dict[str, Any] | Plan, task_id: str | None = None) -> TaskReport:  # noqa: E501
+    def run(
+        self,
+        plan: str | Path | dict[str, Any] | Plan,
+        task_id: str | None = None,
+        *,
+        approved: bool = False,
+    ) -> TaskReport:  # noqa: E501
         self._require_available()
         assert self._repository is not None
         assert self._config is not None
@@ -143,7 +149,7 @@ class TaskService:
         plan_obj.validate()
         if len(plan_obj.steps) > self._config.task.max_steps:
             raise TaskValidationError(f"plan steps {len(plan_obj.steps)} exceeds max {self._config.task.max_steps}")  # noqa: E501
-        # Create task record
+        # Create task record (human approval is recorded, never assumed)
         tid = task_id or f"task_{uuid.uuid4().hex}"
         record = TaskRecord(
             id=tid,
@@ -154,7 +160,7 @@ class TaskService:
             total_steps=len(plan_obj.steps),
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
-            metadata={"workspace_root": str(plan_obj.workspace_root) if plan_obj.workspace_root else None},  # noqa: E501
+            metadata={"workspace_root": str(plan_obj.workspace_root) if plan_obj.workspace_root else None, "human_approved": bool(approved)},  # noqa: E501
         )
         self._repository.create_task(record)
         token = CancellationToken()
@@ -227,6 +233,19 @@ class TaskService:
             return report
         finally:
             self._tokens.pop(task_id, None)
+
+    def verify_plan(self, plan: str | Path | dict[str, Any] | Plan) -> dict[str, Any]:
+        """Statically verify a plan without executing it (Phase 7 gate).
+
+        Accepts the same references as :meth:`run` (file path, plan id,
+        dict, or Plan). Never executes a tool.
+        """
+        from jarvis.planning.verify import verify_plan as _verify
+
+        self._require_available()
+        assert self._config is not None
+        plan_obj = plan if isinstance(plan, Plan) else self._load_plan(plan)
+        return _verify(plan_obj, max_steps=self._config.task.max_steps).to_dict()
 
     def cancel(self, task_id: str) -> dict[str, Any]:
         self._require_available()
