@@ -536,7 +536,8 @@ task-graph + verification loop on top; it must not bypass these facades.
 Phases 6 (voice), 8 (vision), 10 (HUD) ship as sibling subsystems with
 their own CLIs (`jarvis voice|vision|hud …`); vision currently has no
 `vision.*` config section (config-independent service — see integration
-notes). Phase 9 (security hardening) is TODO.
+notes). Phase 9 (security hardening) is done: secret redaction, path/command
+policy tightening, audit safety.
 
 ## 6. Event System
 

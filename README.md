@@ -111,9 +111,9 @@ Phase 5B adds controlled OpenCode delegation under full JARVIS authority:
 | 5B | Controlled OpenCode delegation (DelegationManager, secure permission routing, bounded SSE) | **Done** |
 | 5 | OpenCode integration | **Done** (delivered via 5B delegation layer) |
 | 6 | Workspace/planning/task foundation + voice pipeline (wake word, STT, TTS) | **Done** |
-| 7 | Autonomy (planner, task graph, verification) | Not started |
+| 7 | Autonomy (planner, task graph, verification) | **Done** |
 | 8 | Vision (bounded capture, OCR-free grounding, permissioned tools) | **Done** |
-| 9 | Security hardening | Not started |
+| 9 | Security hardening | **Done** |
 | 10 | HUD interface (local-first status/dashboard) | **Done** |
 
 ## Repository Layout
