@@ -158,6 +158,24 @@ def _build_parser() -> argparse.ArgumentParser:
         "--config", metavar="PATH", default=None, help="configuration file to use"
     )
 
+    briefing_parser = subparsers.add_parser(
+        "briefing", help="deterministic daily brief: health, episodes, tasks, plans"
+    )
+    briefing_parser.add_argument(
+        "--config", metavar="PATH", default=None, help="configuration file to use"
+    )
+    briefing_parser.add_argument("--json", action="store_true", help="machine-readable output")
+    briefing_parser.add_argument(
+        "--content", action="store_true", help="include memory content"
+    )
+    briefing_parser.add_argument(
+        "--days",
+        metavar="N",
+        type=int,
+        default=1,
+        help="episodic look-back in days (must be >= 1; default 1)",
+    )
+
     ai_parser = subparsers.add_parser("ai", help="AI provider commands")
     ai_sub = ai_parser.add_subparsers(dest="ai_command", metavar="SUBCOMMAND")
 
@@ -2058,6 +2076,127 @@ def _cmd_health(args: argparse.Namespace) -> int:
     return EXIT_OK if overall is not HealthStatus.UNHEALTHY else EXIT_FAILURE
 
 
+def _cmd_briefing(args: argparse.Namespace) -> int:
+    """Deterministic daily brief (read-only, no AI calls).
+
+    Composes health + recent episodic memory + open tasks/plans + delegation
+    status. Every section is failure-isolated: one unavailable subsystem marks
+    its section instead of failing the brief.
+    """
+    days = args.days
+    if days is None or days < 1:
+        print(
+            "jarvis briefing: --days must be an integer >= 1",
+            file=sys.stderr,
+        )
+        return EXIT_INVALID
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    except JarvisError as exc:
+        print(f"jarvis briefing: runtime startup failed: {exc}", file=sys.stderr)
+        return EXIT_FAILURE
+    try:
+        brief: dict = {"days": days}
+        try:
+            reports = runtime.health_report()
+            overall = runtime.overall_health()
+            brief["health"] = {
+                "overall": overall.value,
+                "components": [
+                    {
+                        "component": r.component,
+                        "status": r.status.value,
+                        "detail": r.detail,
+                    }
+                    for r in reports
+                ],
+            }
+        except Exception as exc:  # failure-isolated section
+            brief["health"] = {"overall": "unknown", "error": str(exc)}
+        try:
+            cutoff = datetime.now(UTC) - timedelta(days=days)
+            episodes = runtime.memory.retrieve(
+                memory_type=MemoryType.EPISODIC,
+                created_after=cutoff,
+                limit=None,
+            )
+            brief["episodes"] = {
+                "count": episodes.total,
+                "items": [
+                    item.to_dict(include_content=args.content)
+                    for item in episodes.items[:5]
+                ],
+            }
+        except Exception as exc:  # failure-isolated section
+            brief["episodes"] = {"count": 0, "error": str(exc)}
+        try:
+            tasks = runtime.task.list(limit=50)
+            brief["tasks"] = {
+                "open": [
+                    t for t in tasks
+                    if t.get("state") in ("pending", "running", "paused")
+                ],
+            }
+        except Exception as exc:  # failure-isolated section
+            brief["tasks"] = {"open": [], "error": str(exc)}
+        try:
+            plans = runtime.planning.list()
+            brief["plans"] = {
+                "open": [
+                    p for p in plans
+                    if p.get("status") in ("draft", "ready", "running")
+                ],
+            }
+        except Exception as exc:  # failure-isolated section
+            brief["plans"] = {"open": [], "error": str(exc)}
+        try:
+            delegation = runtime.delegation.health()
+            brief["delegation"] = {
+                "status": delegation.get("status", "unknown"),
+                "available": delegation.get("available", False),
+                "active_tasks": delegation.get("active_tasks", 0),
+            }
+        except Exception as exc:  # failure-isolated section
+            brief["delegation"] = {
+                "status": "unknown", "available": False, "error": str(exc),
+            }
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(brief, indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Briefing")
+    health = brief.get("health", {})
+    print(f"  health     {health.get('overall', 'unknown')}")
+    for component in health.get("components", []):
+        if component.get("status") != "HEALTHY":
+            print(f"    ! {component.get('component')}: {component.get('status')}")
+    episodes = brief.get("episodes", {})
+    print(f"  episodes   {episodes.get('count', 0)} in last {days} day(s)")
+    if args.content:
+        for item in episodes.get("items", []):
+            content = item.get("content", "")
+            text = content if isinstance(content, str) else json.dumps(content)
+            print(f"    - {' '.join(text.split())[:80]}")
+    tasks = brief.get("tasks", {}).get("open", [])
+    print(f"  tasks      {len(tasks)} open")
+    for task in tasks[:5]:
+        print(f"    - {task.get('state', '-'):<10} {str(task.get('goal', ''))[:60]}")
+    plans = brief.get("plans", {}).get("open", [])
+    print(f"  plans      {len(plans)} open")
+    for plan in plans[:5]:
+        print(f"    - {plan.get('status', '-'):<10} {str(plan.get('goal', ''))[:60]}")
+    delegation = brief.get("delegation", {})
+    print(
+        f"  delegation {delegation.get('status', 'unknown')} "
+        f"({delegation.get('active_tasks', 0)} active)"
+    )
+    return EXIT_OK
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -2068,6 +2207,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("config requires a subcommand: validate")
     if args.command == "health":
         return _cmd_health(args)
+    if args.command == "briefing":
+        return _cmd_briefing(args)
     if args.command == "ai":
         if args.ai_command == "health":
             return _cmd_ai_health(args)

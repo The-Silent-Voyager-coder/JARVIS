@@ -49,6 +49,9 @@ config/*.local.yaml
 workspaces/
 !workspaces/.gitkeep
 
+# --- Legacy reference projects (previous Jarvis models, local only) ---
+legacy/
+
 # --- Coverage / logs ---
 .coverage.*
 coverage.xml

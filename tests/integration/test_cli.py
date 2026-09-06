@@ -464,6 +464,50 @@ def test_memory_digest_rejects_bad_days(
     assert "--days" in capsys.readouterr().err
 
 
+def test_briefing_empty(valid_config_yaml: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["briefing", "--config", str(valid_config_yaml)])
+    assert code == EXIT_OK
+    out = capsys.readouterr().out
+    assert "J.A.R.V.I.S. Briefing" in out
+    assert "health" in out
+    assert "0 in last 1 day(s)" in out
+    assert "0 open" in out
+    assert "delegation" in out
+
+
+def test_briefing_with_episode_gates_content(
+    valid_config_yaml: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _seed_episodes(valid_config_yaml)
+    code = main(["briefing", "--config", str(valid_config_yaml)])
+    assert code == EXIT_OK
+    out = capsys.readouterr().out
+    assert "3 in last 1 day(s)" in out
+    assert "ran the full test suite" not in out  # content hidden by default
+
+    code = main(["briefing", "--content", "--config", str(valid_config_yaml)])
+    assert code == EXIT_OK
+    assert "ran the full test suite" in capsys.readouterr().out
+
+
+def test_briefing_json(valid_config_yaml: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    _seed_episodes(valid_config_yaml)
+    code = main(["briefing", "--json", "--config", str(valid_config_yaml)])
+    assert code == EXIT_OK
+    out = capsys.readouterr().out
+    for key in ('"health"', '"episodes"', '"tasks"', '"plans"', '"delegation"'):
+        assert key in out
+    assert "content" not in out  # redacted without --content
+
+
+def test_briefing_rejects_bad_days(
+    valid_config_yaml: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(["briefing", "--days", "0", "--config", str(valid_config_yaml)])
+    assert code == EXIT_INVALID
+    assert "--days" in capsys.readouterr().err
+
+
 # --- delegation ---------------------------------------------------------
 
 

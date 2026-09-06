@@ -175,6 +175,10 @@ python -m venv .venv
 .\.venv\Scripts\jarvis.exe memory get mem_<id> --content
 .\.venv\Scripts\jarvis.exe memory delete mem_<id>   # auditable soft delete
 
+# daily brief: health + recent episodes + open tasks/plans + delegation
+.\.venv\Scripts\jarvis.exe briefing
+.\.venv\Scripts\jarvis.exe briefing --days 7 --content
+
 # inspect and drive the secure tool system (files/processes/shell/system)
 .\.venv\Scripts\jarvis.exe tools list
 .\.venv\Scripts\jarvis.exe tools info filesystem.write

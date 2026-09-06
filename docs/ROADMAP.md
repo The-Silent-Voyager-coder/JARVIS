@@ -53,4 +53,5 @@ multi-step household routines, hardening from daily use.
 
 | Date | Increment | Status |
 |---|---|---|
-| 2026-09-05 | Roadmap written; `memory digest` deterministic episodic rollup | Built (this commit) |
+| 2026-09-05 | Roadmap written; `memory digest` deterministic episodic rollup | Committed (`3afdaad`), pushed |
+| 2026-09-06 | Legacy models housed in `legacy/` (Jarvis-SSS scaffold + jarvis-main donor); `jarvis briefing` deterministic daily brief (health + episodes + open tasks/plans + delegation) | Built, 968 tests green, uncommitted |
