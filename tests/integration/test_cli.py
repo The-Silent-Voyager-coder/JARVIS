@@ -384,6 +384,86 @@ def test_memory_list_json(valid_config_yaml: Path, capsys: pytest.CaptureFixture
     assert "content" not in out  # hidden in JSON without --content
 
 
+def _seed_episodes(config_path: Path) -> None:
+    from jarvis.configuration.loader import load_config
+    from jarvis.memory.service import MemoryService
+
+    service = MemoryService()
+    service.start(load_config(config_path).config)
+    service.record_episode("ran the full test suite", action="test", session_id="sess-a")
+    service.record_episode("fixed a typo in the docs", action="edit", session_id="sess-a")
+    service.record_episode("reviewed the roadmap", action="review", session_id="sess-b")
+    service.shutdown()
+
+
+def test_memory_digest_empty(valid_config_yaml: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["memory", "digest", "--config", str(valid_config_yaml)])
+    assert code == EXIT_OK
+    out = capsys.readouterr().out
+    assert "J.A.R.V.I.S. Memory Digest" in out
+    assert "(none)" in out
+
+
+def test_memory_digest_groups_by_day_without_content(
+    valid_config_yaml: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _seed_episodes(valid_config_yaml)
+    code = main(["memory", "digest", "--config", str(valid_config_yaml)])
+    assert code == EXIT_OK
+    out = capsys.readouterr().out
+    assert "J.A.R.V.I.S. Memory Digest" in out
+    assert "3 episodic" in out
+    assert "ran the full test suite" not in out  # content hidden by default
+
+
+def test_memory_digest_content_and_session_filter(
+    valid_config_yaml: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _seed_episodes(valid_config_yaml)
+    code = main(
+        ["memory", "digest", "--content", "--config", str(valid_config_yaml)]
+    )
+    assert code == EXIT_OK
+    assert "ran the full test suite" in capsys.readouterr().out
+
+    code = main(
+        ["memory", "digest", "--session", "sess-b", "--config", str(valid_config_yaml)]
+    )
+    assert code == EXIT_OK
+    out = capsys.readouterr().out
+    assert "1 episodic" in out
+    assert "sess-b" in out
+
+
+def test_memory_digest_json_redacts_without_content(
+    valid_config_yaml: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _seed_episodes(valid_config_yaml)
+    code = main(
+        ["memory", "digest", "--json", "--config", str(valid_config_yaml)]
+    )
+    assert code == EXIT_OK
+    out = capsys.readouterr().out
+    assert '"total": 3' in out
+    assert '"days"' in out
+    assert "content" not in out
+
+    code = main(
+        ["memory", "digest", "--json", "--content", "--config", str(valid_config_yaml)]
+    )
+    assert code == EXIT_OK
+    out = capsys.readouterr().out
+    assert "ran the full test suite" in out
+
+
+def test_memory_digest_rejects_bad_days(
+    valid_config_yaml: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = main(["memory", "digest", "--days", "0", "--config", str(valid_config_yaml)])
+    assert code == EXIT_INVALID
+    assert "--days" in capsys.readouterr().err
+
+
 # --- delegation ---------------------------------------------------------
 
 

@@ -284,4 +284,7 @@ Note: the Phase 6 voice pipeline adds a `voice:` section (wake_word / stt
 / tts engine + model selections, see `config/jarvis.example.yaml`).
 Vision (Phase 8) currently defines no `vision.*` config keys — its
 service is config-independent. Phase 7 (autonomy) and Phase 9 (security)
-add no new config sections yet.
+add no new config sections by design: Phase 7 ships as
+`jarvis/planning/graph.py` + `verify.py` over the Phase 6 `planning:` /
+`task:` blocks, and Phase 9 ships as `tools/redaction.py` + policy
+tightening under the existing `security:` / `tools:` blocks.

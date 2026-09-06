@@ -1,0 +1,46 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  // J.A.R.V.I.S. project config — portable, zero-cost, local-first.
+  // Merges with the global config (~/.config/opencode/opencode.jsonc),
+  // which already wires the full ECC library (plugin + 35 OpenCode
+  // commands + 271 skills via ~/.opencode). This file adds ONLY
+  // Jarvis-specific bindings: server endpoint matching
+  // config/jarvis.example.yaml (ai.providers.opencode), Jarvis
+  // instruction docs so the executor respects JARVIS authority, and
+  // restrictive permissions so every write/exec surfaces as a
+  // permission request for the JARVIS SecurityPolicy to decide.
+  // No user-specific absolute paths (see docs/DEVELOPMENT_RULES.md §1 anti-pattern 6).
+  // No paid-model defaults (zero-cost rule): model selection stays
+  // with the operator's local provider.
+  "server": {
+    "port": 4096,
+    "hostname": "127.0.0.1"
+  },
+  "instructions": [
+    "docs/ARCHITECTURE.md",
+    "docs/DEVELOPMENT_RULES.md",
+    "docs/SECURITY_MODEL.md",
+    "docs/TOOLS.md",
+    "docs/AGENTS.md",
+    "docs/OPENCODE_INTEGRATION.md",
+    "docs/INTERFACES.md",
+    "docs/CONFIGURATION.md",
+    "docs/TESTING.md"
+  ],
+  // JARVIS is authority, OpenCode is executor: anything that mutates
+  // state or reaches the network must surface as `ask` so the
+  // DelegationManager can ALLOW/ASK/DENY per the security pipeline.
+  // `read` stays at the OpenCode default (allow) — SAFE reads inside
+  // allowed roots are auto-approved by JARVIS policy anyway.
+  // Never set blanket allow / --auto for unrestricted bash+edit.
+  "permission": {
+    "edit": "ask",
+    "bash": "ask",
+    "task": "ask",
+    "skill": "ask",
+    "question": "ask",
+    "webfetch": "ask",
+    "websearch": "ask",
+    "external_directory": "ask"
+  }
+}

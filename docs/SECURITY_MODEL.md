@@ -63,7 +63,7 @@ risk_level, decision, user_response, scope, duration, error
 Audit log location: `C:\JARVIS\data\audit.log` (config-overridable).
 Audit writes are synchronous and cannot be disabled by agents.
 
-## 6. Threads (implemented Phase 9; design now)
+## 6. Threads (Phase 9 scope — see §10 for what shipped)
 
 - Permission manager with policy file (`security.policy` section of config).
 - Sandboxing for high-risk processes (timeout, working-dir jail, no network
@@ -179,7 +179,6 @@ Without changing the §2 risk vocabulary or the allow/ask/deny matrix:
   target to decide.
 
 ## 11. Voice / Vision Threat Model (contract for Phase 6–8 implementers)
-
 - **Microphone and screen are sensors, not inputs.** Capture (mic audio,
   screenshots) requires explicit user enablement and is treated as at least
   `ASK`-gated `READ`: no background capture, no capture inside delegated or
@@ -200,7 +199,7 @@ Without changing the §2 risk vocabulary or the allow/ask/deny matrix:
 - **Local-first.** Voice/vision pipelines run on-machine with stdlib-only
   code; no audio, transcript, or image leaves the machine without explicit
   user approval per destination.
-## 9. Agent Loop Security (Phase 5A)
+## 12. Agent Loop Security (Phase 5A)
 
 The agent loop never weakens the tool security pipeline:
 

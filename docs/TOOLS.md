@@ -235,7 +235,8 @@ inside a tool becomes a failed result with `error`, never a crashed process.
 
 ## 12. Out of Scope (Phase 4)
 
-The AI tool-calling loop (model chooses tools from `AIRequest.tools`) and
-OpenCode delegation of tool calls are Phase 5+. Network/browser/GUI tools and
-autonomous agents remain future work. Deleting files and killing processes
+The AI tool-calling loop (model chooses tools from `AIRequest.tools`) shipped
+as Phase 5A (`docs/AGENTS.md`) and OpenCode delegation of tool calls shipped
+as Phase 5B (`jarvis/delegation/`). Network/browser/GUI tools remain reserved
+for later phases. Deleting files and killing processes
 are intentionally impossible through the tool system.

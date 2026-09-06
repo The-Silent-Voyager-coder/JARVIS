@@ -58,6 +58,7 @@ import json
 import sys
 import uuid
 from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
@@ -232,6 +233,25 @@ def _build_parser() -> argparse.ArgumentParser:
     mem_search.add_argument("--json", action="store_true", help="machine-readable output")
     mem_search.add_argument("--content", action="store_true", help="include memory content")
     _add_memory_filter_args(mem_search)
+
+    mem_digest = memory_sub.add_parser(
+        "digest", help="daily rollup of episodic memories (deterministic, no AI)"
+    )
+    mem_digest.add_argument(
+        "--config", metavar="PATH", default=None, help="configuration file to use"
+    )
+    mem_digest.add_argument("--json", action="store_true", help="machine-readable output")
+    mem_digest.add_argument("--content", action="store_true", help="include memory content")
+    mem_digest.add_argument(
+        "--session", metavar="ID", default=None, help="only episodes from this session"
+    )
+    mem_digest.add_argument(
+        "--days",
+        metavar="N",
+        type=int,
+        default=7,
+        help="look back N days (must be >= 1; default 7)",
+    )
 
     tools_parser = subparsers.add_parser("tools", help="tool commands")
     tools_sub = tools_parser.add_subparsers(dest="tools_command", metavar="SUBCOMMAND")
@@ -873,6 +893,65 @@ def _cmd_memory_search(args: argparse.Namespace) -> int:
         include_content=args.content, json_mode=args.json,
         header=f"J.A.R.V.I.S. Memory Search: {args.query!r}",
     )
+    return EXIT_OK
+
+
+def _cmd_memory_digest(args: argparse.Namespace) -> int:
+    days = args.days
+    if days is None or days < 1:
+        print(
+            "jarvis memory digest: --days must be an integer >= 1",
+            file=sys.stderr,
+        )
+        return EXIT_INVALID
+    try:
+        runtime = _memory_runtime(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        cutoff = datetime.now(UTC) - timedelta(days=days)
+        result = runtime.memory.retrieve(
+            memory_type=MemoryType.EPISODIC,
+            session_id=getattr(args, "session", None),
+            created_after=cutoff,
+            limit=None,
+        )
+    except MemoryError as exc:
+        print(f"jarvis memory digest: {exc}", file=sys.stderr)
+        return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    days_out: list[dict] = []
+    by_date: dict[str, list] = {}
+    for item in result.items:
+        by_date.setdefault(item.memory.created_at.date().isoformat(), []).append(item)
+    for date in sorted(by_date, reverse=True):
+        items = by_date[date]
+        days_out.append(
+            {
+                "date": date,
+                "count": len(items),
+                "items": [
+                    item.to_dict(include_content=args.content) for item in items
+                ],
+            }
+        )
+    if args.json:
+        print(json.dumps({"days": days_out, "total": result.total}, indent=2))
+        return EXIT_OK
+    scope = f"session {args.session} " if getattr(args, "session", None) else ""
+    print(f"J.A.R.V.I.S. Memory Digest ({scope}last {days} day(s))")
+    if not days_out:
+        print("  (none)")
+        return EXIT_OK
+    for day in days_out:
+        print(f"  {day['date']}  {day['count']} episodic")
+        if args.content:
+            for item in day["items"]:
+                content = item.get("content", "")
+                text = content if isinstance(content, str) else json.dumps(content)
+                print(f"    - {' '.join(text.split())[:80]}")
     return EXIT_OK
 
 
@@ -2010,8 +2089,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _cmd_memory_stats(args)
         if args.memory_command == "search":
             return _cmd_memory_search(args)
+        if args.memory_command == "digest":
+            return _cmd_memory_digest(args)
         parser.error(
-            "memory requires a subcommand: health, list, get, delete, stats, search"
+            "memory requires a subcommand: health, list, get, delete, stats, search, digest"
         )
     if args.command == "tools":
         if args.tools_command == "list":

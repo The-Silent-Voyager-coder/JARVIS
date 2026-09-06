@@ -1,6 +1,8 @@
 # Core Interfaces
 
-> Status: **Phase 5A implementation notes added**. Section 1 is implemented as
+> Status: **Phases 1–10 implemented (5A agent loop, 5B delegation,
+> 6 workspace/planning/task + voice, 7 autonomy, 8 vision stub,
+> 9 hardening, 10 HUD)**. Section 1 is implemented as
 > the provider abstraction and health contract (`jarvis.intelligence`);
 > sections 6 and 7 remain implemented (`jarvis.core.registry`,
 > `jarvis.configuration`); §9 documents the implemented memory interfaces
@@ -695,4 +697,6 @@ subsystem, or non-completed task state; `2` invalid input/configuration
 - Phase 6 voice pipeline CLI is merged (`jarvis voice health|listen|speak`).
 - Phase 7 (autonomy: planner + task-graph + verification on top of
   `jarvis/planning` + `jarvis/task`) and Phase 9 (security hardening)
-  contracts are TODO — owned by their phase leads.
+  are implemented (`jarvis/planning/graph.py` + `verify.py`,
+  `jarvis/tools/redaction.py` + policy tightening — see `docs/AUTONOMY.md`
+  and `docs/SECURITY_MODEL.md` §10).

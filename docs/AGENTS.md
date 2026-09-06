@@ -17,8 +17,9 @@ flow.**
 - The `AgentOrchestrator` owns the loop (generate → propose → execute →
   observe → repeat, bounded); the `AgentService` owns gating, limits,
   approval swap, memory retrieval, cancellation, and health.
-- Nothing in the loop is OpenCode-specific; OpenCode delegation remains a
-  later phase and is out of scope here.
+- Nothing in the loop is OpenCode-specific; OpenCode delegation lives in
+  the Phase 5B delegation layer (`jarvis/delegation/`) and is out of scope
+  for the loop itself — the orchestrator never calls it directly.
 
 ## 2. State Machine
 

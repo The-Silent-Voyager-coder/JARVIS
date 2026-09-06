@@ -106,7 +106,39 @@ message endpoints, `tool_call` maps to delegating a task, `health_check` maps
 to `/global/health`, `cancel` maps to abort. The OpenCode-specific session
 lifecycle stays inside `integration/`.
 
-## 7. Phase 2 Implementation (`jarvis/intelligence/opencode.py`)
+## 7. ECC (Everything Claude Code) Wiring
+
+The full ECC library lives outside this repo at `~/.ecc` (271 skills,
+67 Claude agents, 92 Claude commands, `.opencode` plugin + 35 OpenCode
+commands, MCP catalog). It is integrated into OpenCode in two layers:
+
+- **Global (operator machine, not committed):**
+  `~/.opencode/` auto-loads as a global `.opencode` directory —
+  `dist/index.js` (built plugin), `commands/` (35, mirror of
+  `~/.ecc/.opencode/commands/`), `skills/ecc` (junction →
+  `~/.ecc/skills`, all 271 skills), `instructions/`, `prompts/`,
+  `tools/`. Keep it in sync after each ECC update with the vendored
+  script (rebuilds the plugin and re-copies assets):
+  `~/.opencode/update-ecc.ps1`. Verify with `opencode debug config`
+  (expect `everything-claude-code:*` agents/commands) and
+  `opencode mcp list`.
+- **Project (this repo, committed):** `opencode.json` at the repo root
+  merges with the global config and adds only Jarvis bindings —
+  `server` (`127.0.0.1:4096`, matching `ai.providers.opencode`),
+   `instructions` (Jarvis docs, relative paths only per
+   `docs/DEVELOPMENT_RULES.md` §1 anti-pattern 6), and restrictive `permission`
+  (`edit`/`bash`/`task`/`skill`/`question`/`webfetch`/`websearch`/
+  `external_directory` = `ask`) so every mutation surfaces for the
+  JARVIS SecurityPolicy. No model default (zero-cost rule), no
+  absolute user paths, no secrets.
+
+MCP policy: the ECC catalog (`~/.ecc/mcp-configs/mcp-servers.json`)
+is reference-only. Enable only zero-cost local servers (e.g.
+`ccusage-opencode`, `memory`, `sequential-thinking`); paid/network
+services (firecrawl, exa, vercel, …) stay disabled unless the operator
+explicitly opts in with env-provided keys — never committed.
+
+## 8. Phase 2 Implementation (`jarvis/intelligence/opencode.py`)
 
 Phase 2 lands the **provider connection** only — no delegation workflow, no
 permission response, no agent loop:
@@ -121,10 +153,12 @@ permission response, no agent loop:
 - Generation: `POST /session` → `POST /session/:id/prompt` with
   `prompt_async`; sessions are best-effort cleaned up (`DELETE`). Bearer
   auth from `api_key_env` (read from the environment once, never from source).
-- What Phase 3+ adds: SSE `/event` streaming (`STREAMING` capability),
-  tool/authority delegation with permission decisions from the JARVIS
-  security layer, task handoff and diff review — all gated behind the
-  capabilities the provider then advertises.
-- Deferred pieces (§2–§5 of this doc) remain design contracts; the adapter
-  is deliberately narrower than the eventual client so nothing in Phase 2
-  depends on unverified endpoints.
+- What Phase 5B added on top: SSE `/event` streaming, tool/authority
+  delegation with permission decisions from the JARVIS
+  security layer (`jarvis/delegation/` — manager, secure permission routing,
+  bounded SSE, `DELEGATION_*` audit events), task handoff and diff review —
+  all gated behind the capabilities the provider advertises.
+- Deferred pieces (§2–§5 of this doc) remain design contracts where noted;
+  the adapter stays deliberately narrower than the eventual client so nothing
+  depends on unverified endpoints. `jarvis/integration/` is reserved (empty)
+  — the OpenCode wire lives in `jarvis/intelligence/opencode.py`.

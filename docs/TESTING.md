@@ -216,3 +216,21 @@ Coverage:
   `jarvis.__version__` as authoritative — a stale or unrelated installed
   distribution reusing the `jarvis` dist name must not mislabel running
   code (covered by `tests/integration/test_cli.py::test_version`).
+## 6e. Phase 5B–10 baseline (delegation, autonomy, voice, vision, HUD, hardening)
+
+- **959 tests passing** (Sept 2026 baseline: `pytest tests -q` → 959 passed;
+  README's older "732" figure predates the Phase 6–10 suites), `ruff check
+  jarvis tests` clean, `mypy jarvis` clean (111 source files).
+- New suites since §6d: `tests/unit/delegation/` (models, manager, service),
+  `tests/unit/planning/test_graph.py` + `test_verify.py` (Phase 7 DAG +
+  verification gate), `tests/unit/voice/` (6 files, stub backends),
+  `tests/unit/vision/` (7 files, stub backend, no OCR),
+  `tests/unit/interface/test_hud.py` (Phase 10 read-only dashboard),
+  `tests/unit/tools/test_security_hardening.py` (Phase 9 redaction + policy
+  tightening), plus CLI integration `test_cli_voice.py`, `test_cli_vision.py`,
+  `test_cli_hud.py`.
+- Test layout has converged to `tests/unit/<module>/` +
+  `tests/integration/test_cli*.py` (the `tests/providers|tools|security|
+  memory|tasks|opencode` top-level layout in §2 remains aspirational).
+- Voice/vision suites assert stub honesty: mock STT/TTS, `[stub-no-ocr]`
+  grounding marker, metadata-only capture — no model downloads, no network.

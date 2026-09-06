@@ -81,10 +81,12 @@ Phase 5A adds the bounded, auditable AI↔tool loop on top of all four layers:
   regression), offline CLI integration suite, scripted mock-provider
   tool-call tests; ruff + mypy clean
 
-**Not yet implemented**: unattended autonomy (Phase 7), security hardening
-(Phase 9), and semantic-memory ingestion — voice (Phase 6), vision
-(Phase 8), HUD (Phase 10), and OpenCode delegation (Phase 5B) are
-implemented.
+**Shipped since**: autonomy task-graph + verification gate (Phase 7),
+security hardening — secret redaction + policy tightening (Phase 9) —
+voice pipeline with stub backends, no model downloads (Phase 6), vision
+with stub backend, no OCR (Phase 8), read-only HUD status/dashboard
+(Phase 10), and OpenCode delegation (Phase 5B). Semantic-memory ingestion
+remains future work.
 
 ## Current Status (Phase 5B)
 
@@ -96,7 +98,8 @@ Phase 5B adds controlled OpenCode delegation under full JARVIS authority:
 - **Hard-bounded execution**: `max_wall_time_seconds` (1800s default, 7200s ceiling), `max_output_bytes` (4 MiB/32 MiB), `max_permission_requests` (50/200), `max_session_count` (3/10), `max_delegation_depth` (1 — no recursion), `SSE_RECONNECT_LIMIT` (3) — validated at config load and re-validated per run.
 - **Full lifecycle**: `DelegationState` (`created → starting → running ⇄ waiting_for_permission → completing → completed/failed/cancelled/timed_out`), bounded SSE with malformed-event tolerance, timeout/cancellation/diff retrieval, session cleanup, and `DELEGATION_*` + `TOOL_*` audit events (no prompts, no secrets).
 - **CLI**: `jarvis delegation health|list|get <task_id>|cancel <task_id> [--json]` (same auth path as `jarvis agent`/`tools`).
-- **Tests**: 732 passing (55 delegation, 32 OpenCode), `ruff`/`mypy` clean.
+- **Tests**: 959 passing (Sept 2026 baseline; incl. 55 delegation, 32 OpenCode),
+  `ruff`/`mypy` clean.
 
 ## Development Phases
 
@@ -168,6 +171,7 @@ python -m venv .venv
 .\.venv\Scripts\jarvis.exe memory stats
 .\.venv\Scripts\jarvis.exe memory search "api key" --content
 .\.venv\Scripts\jarvis.exe memory list --type long_term
+.\.venv\Scripts\jarvis.exe memory digest --days 7
 .\.venv\Scripts\jarvis.exe memory get mem_<id> --content
 .\.venv\Scripts\jarvis.exe memory delete mem_<id>   # auditable soft delete
 

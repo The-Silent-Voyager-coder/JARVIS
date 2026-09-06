@@ -1,10 +1,15 @@
 # Architecture
 
-> Status: **Phase 5A — bounded agent tool loop implemented**. This is the
+> Status: **Phases 1–10 implemented (5A agent loop, 5B delegation,
+> 6 workspace/planning/task + voice, 7 autonomy graph/verify, 8 vision stub,
+> 9 hardening, 10 HUD)**. This is the
 > contract that all modules must honor. It may be refined by the architect,
 > but not silently violated by implementation. Phase 2 added full detail for
 > the intelligence section; Phase 3 adds the memory section (§5.2); Phase 4
-> adds the tool section (§5.3); Phase 5A adds the agent section (§5.4).
+> adds the tool section (§5.3); Phase 5A adds the agent section (§5.4);
+> §5.5 covers the Phase 6 workspace/planning/task substrate (Phase 7
+> autonomy, Phase 8 vision, Phase 9 hardening, and Phase 10 HUD ship as
+> sibling subsystems — see per-doc contracts).
 
 ## 1. Mission
 
@@ -84,13 +89,16 @@ verifies results before claiming success.
 | `memory/` | Memory models, SQLite storage, provenance, retrieval | 3 |
 | `tools/` | Typed tool registry + security pipeline (files, processes, shell, system); policy, path security, shell classifier, approvals | 4 |
 | `agent/` | Bounded AI↔tool loop: validated state machine, limits, loop detection, approval pause, cancellation, events, health | 5A |
-| `integration/` | OpenCode client: health, sessions, events, delegation, results | 5 |
-| `voice/` | Wake word, STT, TTS, voice session management | 6 |
-| `planning/` | Planner, task graph, execution loop, retries, verification, persistence | 7 |
-| `agents/` | Composable agents (research, general) built on planning +
-  intelligence | 7+ |
-| `security/` | Permission manager, risk levels, audit, secrets policy | 9 |
-| `vision/` | Screenshot analysis, UI understanding (optional) | 8 |
+| `delegation/` | Controlled OpenCode delegation: manager, limits, service, secure permission routing, bounded SSE | 5B |
+| `workspace/` | Workspace discovery, scanner, persistence | 6 |
+| `planning/` | Deterministic plan decomposition + task-graph DAG + verification gate (no AI calls) | 6/7 |
+| `task/` | Bounded multi-step execution over the tool pipeline | 6 |
+| `voice/` | Wake word, STT, TTS local-first pipeline (stub backends — no model downloads) | 6 |
+| `agents/` | Reserved for composable agents (empty — Phase 7 ships as `planning/graph.py` + `verify.py`) | 7+ (reserved) |
+| `security/` | Reserved (empty by design — Phase 9 ships as `tools/redaction.py` + policy tightening) | 9 (patch) |
+| `vision/` | Bounded capture, grounding, permissioned tools (stub backend, no OCR) | 8 |
+| `interface/` | Local-first HUD status/dashboard (read-only; no `hud/` module) | 10 |
+| `integration/` | Reserved (empty — OpenCode wire lives in `intelligence/opencode.py` + `delegation/`) | 5 (via 5B) |
 | `storage/` | Local filesystem layout, archive policy (Google Drive = external archive only) | 1 |
 | `tests/` | Unit, integration, provider, tool, security, memory, task, OpenCode tests | all |
 
@@ -530,7 +538,7 @@ the CLI. Shutdown order is task → planning → workspace. CLI surface:
 
 Boundaries: the planner never emits unknown tool IDs (fixed allow-list
 mirroring the Phase 4 registry) and never executes anything — execution
-belongs to the task executor. Phase 7 (autonomy) will add the planner +
+belongs to the task executor. Phase 7 (autonomy) adds the planner +
 task-graph + verification loop on top; it must not bypass these facades.
 
 Phases 6 (voice), 8 (vision), 10 (HUD) ship as sibling subsystems with
