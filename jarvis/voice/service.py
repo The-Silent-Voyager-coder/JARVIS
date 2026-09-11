@@ -96,6 +96,9 @@ class VoiceService:
         self._stt = stt or STTManager(limits=self._limits)
         self._tts = tts or TTSManager(limits=self._limits)
         self._wake = wake or KeywordWakeDetector(self._limits.wake_keyword, limits=self._limits)
+        self._stt_injected = stt is not None
+        self._tts_injected = tts is not None
+        self._wake_injected = wake is not None
         self.publisher: Any = None  # callable(event) -> None, wired by runtime
         self.availability: str = "unavailable"
         self.detail: str = "voice service not started"
@@ -117,6 +120,18 @@ class VoiceService:
             self._repository.initialize()
             self._allowed_roots = tuple(config.tools.allowed_roots)
             self._denied_roots = tuple(config.tools.denied_roots)
+            if not self._stt_injected:
+                from jarvis.voice.backends import build_stt_manager
+
+                self._stt = build_stt_manager(config, self._limits)
+            if not self._tts_injected:
+                from jarvis.voice.backends import build_tts_manager
+
+                self._tts = build_tts_manager(config, self._limits)
+            if not self._wake_injected:
+                from jarvis.voice.backends import build_wake_detector
+
+                self._wake = build_wake_detector(config, self._limits)
             self.availability = "healthy"
             self.detail = (
                 f"voice ready (stt={self._stt.backend_name}, "

@@ -289,6 +289,9 @@ def test_corrupted_database_raises_and_keeps_file(tmp_path: Path) -> None:
     with pytest.raises(MemoryDatabaseError, match="kept as-is"):
         repository.initialize()
     assert path.exists()  # never deleted to repair
+    quarantined = list((tmp_path / "corrupt.quarantine").glob("corrupt-*.db.corrupt"))
+    assert len(quarantined) == 1  # timestamped copy kept for recovery
+    assert quarantined[0].read_bytes() == path.read_bytes()
 
 
 def test_newer_schema_refused(tmp_path: Path) -> None:

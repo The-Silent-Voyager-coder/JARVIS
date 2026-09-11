@@ -251,3 +251,15 @@ class VoiceTimeoutError(VoiceError):
 
 class VoiceUnavailableError(VoiceError):
     """The voice subsystem failed to start and cannot serve requests."""
+
+
+class SchedulerError(JarvisError):
+    """The scheduler subsystem failed (schedules, ticks, or storage)."""
+
+
+class SchedulerValidationError(SchedulerError):
+    """A schedule or tick request did not pass validation."""
+
+
+class SchedulerUnavailableError(SchedulerError):
+    """The scheduler subsystem failed to start and cannot serve requests."""

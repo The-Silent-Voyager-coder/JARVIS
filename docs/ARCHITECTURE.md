@@ -87,13 +87,16 @@ verifies results before claiming success.
 | `interface/` | CLI, terminal/simple web/voice entry points | 1 |
 | `intelligence/` | `AIProvider` abstraction, local provider, model router, structured output, streaming | 2 |
 | `memory/` | Memory models, SQLite storage, provenance, retrieval | 3 |
-| `tools/` | Typed tool registry + security pipeline (files, processes, shell, system); policy, path security, shell classifier, approvals | 4 |
+| `tools/` | Typed tool registry + security pipeline (files, processes, shell, system, network, gui); policy, path security, shell classifier, approvals | 4 + roadmap |
 | `agent/` | Bounded AI↔tool loop: validated state machine, limits, loop detection, approval pause, cancellation, events, health | 5A |
 | `delegation/` | Controlled OpenCode delegation: manager, limits, service, secure permission routing, bounded SSE | 5B |
 | `workspace/` | Workspace discovery, scanner, persistence | 6 |
 | `planning/` | Deterministic plan decomposition + task-graph DAG + verification gate (no AI calls) | 6/7 |
 | `task/` | Bounded multi-step execution over the tool pipeline | 6 |
-| `voice/` | Wake word, STT, TTS local-first pipeline (stub backends — no model downloads) | 6 |
+| `voice/` | Wake word, STT, TTS local-first pipeline (mock default; Vosk/Piper/fuzzy opt-in, models under `C:/JARVIS/models`) | 6 + roadmap A |
+| `memory/` | … + local embeddings (Ollama `nomic-embed-text`, `memory_embeddings` table, semantic recall) | 3 + roadmap B |
+| `scheduler/` | SQLite-backed recurring jobs (`briefing`/`tool` kinds, bounded `tick`, no daemon) | roadmap C |
+| `telegram/` | Remote chat bridge (Bot API long-poll, allowlisted chats, bounded listen) | roadmap C |
 | `agents/` | Reserved for composable agents (empty — Phase 7 ships as `planning/graph.py` + `verify.py`) | 7+ (reserved) |
 | `security/` | Reserved (empty by design — Phase 9 ships as `tools/redaction.py` + policy tightening) | 9 (patch) |
 | `vision/` | Bounded capture, grounding, permissioned tools (stub backend, no OCR) | 8 |
@@ -149,13 +152,13 @@ CREATED → INITIALIZING → RUNNING → STOPPING → STOPPED
 - `Runtime.stop()` is idempotent and safe before start: stop services in
   reverse dependency order → publish `RuntimeStopping` and `RuntimeStopped` →
   close the bus → flush logs → `STOPPED`.
-- Health (`jarvis/core/health.py`): nine checks — `core` (lifecycle state),
+- Health (`jarvis/core/health.py`): core checks — `core` (lifecycle state),
   `configuration` (loaded + validated), `event_bus` (open and accepting),
-  `service_registry` (registered + started), `storage` (data root writable),
-  `intelligence` (at least one provider healthy — added in Phase 2), `memory`
-  (memory subsystem HEALTHY — added in Phase 3), `tools` (tool subsystem
-  HEALTHY — added in Phase 4), and `agent` (agent subsystem HEALTHY — added
-  in Phase 5A). Overall status = HEALTHY only when every check is HEALTHY,
+  `service_registry` (registered + started), `storage` (data root writable) —
+  plus one self-registered check per subsystem (`intelligence` from Phase 2,
+  `memory` from Phase 3, `tools` from Phase 4, `agent` from Phase 5A,
+  delegation/workspace/planning/task/scheduler/telegram as each landed).
+  Overall status = HEALTHY only when every check is HEALTHY,
   DEGRADED when at least one is DEGRADED, otherwise UNHEALTHY.
 
 ## 5.1 Intelligence Layer (Phase 2)

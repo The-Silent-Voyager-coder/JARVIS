@@ -25,9 +25,9 @@ class ToolCategory(StrEnum):
     PROCESS = "process"
     SYSTEM = "system"
     SHELL = "shell"
-    NETWORK = "network"  # reserved for a later phase
+    NETWORK = "network"  # live since roadmap Phase C (fetch, homeassistant)
     BROWSER = "browser"  # reserved for a later phase
-    GUI = "gui"  # reserved for a later phase
+    GUI = "gui"  # live since laptop-control work (screenshot, click, type)
 
 
 class ToolRisk(StrEnum):

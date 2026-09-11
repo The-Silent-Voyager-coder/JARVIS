@@ -1,19 +1,19 @@
-"""Speech-to-text abstraction (Phase 6).
+"""Speech-to-text abstraction (Phase 6 + real offline engines).
 
-Stdlib only, zero-cost, local-first. The active backend is a
-deterministic mock: text input is echoed with a `[mock-stt]` marker and
-WAV input yields a deterministic placeholder transcript derived from
-the audio bytes. No model download, no cloud API is ever required. A
-real offline engine (e.g. a local whisper.cpp binary) may be added
-later behind the same `STTBackend` ABC without changing callers.
+Backends: `mock` (deterministic echo, always available), `vosk` (real
+offline transcription of 16 kHz mono PCM WAV via the Vosk model under
+`{models_dir}/vosk/`), `faster-whisper` (accepted name, unavailable on
+hosts without the package — explicit, never a silent fallback).
 """
 
 from __future__ import annotations
 
 import hashlib
 import logging
+import struct
 import time
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any
 
 from jarvis.exceptions import VoiceTimeoutError, VoiceValidationError
@@ -81,6 +81,113 @@ class OfflineSTTBackend(MockSTTBackend):
 
     def is_available(self) -> bool:
         return False
+
+
+class FasterWhisperSTTBackend(MockSTTBackend):
+    """Accepted engine name for hosts with faster-whisper installed.
+
+    The package is unavailable on this host (Python 3.13 Windows wheels are
+    missing), so this backend reports unavailable with an explicit reason
+    instead of silently falling back. Use `vosk` for real transcription.
+    """
+
+    name = "faster-whisper"
+    backend = VoiceBackend.OFFLINE
+
+    def is_available(self) -> bool:
+        import importlib.util
+
+        if importlib.util.find_spec("faster_whisper") is None:
+            return False
+        return False
+
+
+def parse_wav_pcm(audio: bytes) -> tuple[int, int, int, bytes]:
+    """Parse WAV bytes; returns (sample_rate, channels, bits, pcm).
+
+    Raises VoiceValidationError for non-WAV input or non-PCM layouts.
+    """
+    if not is_wav_bytes(audio):
+        raise VoiceValidationError("STT audio must be WAV (RIFF/WAVE) bytes")
+    if len(audio) < 44:
+        raise VoiceValidationError("STT audio is shorter than a WAV header")
+    try:
+        (fmt_tag, channels, sample_rate, _, _, bits) = struct.unpack("<HHIIHH", audio[20:36])
+    except struct.error as exc:
+        raise VoiceValidationError(f"STT audio has an unreadable fmt chunk: {exc}") from exc
+    if fmt_tag != 1:
+        raise VoiceValidationError(f"STT audio must be PCM, got format tag {fmt_tag}")
+    marker = audio.find(b"data")
+    if marker < 0 or marker + 8 > len(audio):
+        raise VoiceValidationError("STT audio has no data chunk")
+    return sample_rate, channels, bits, audio[marker + 8 :]
+
+
+class VoskSTTBackend(STTBackend):
+    """Real offline transcription via a local Vosk model directory."""
+
+    name = "vosk"
+    backend = VoiceBackend.OFFLINE
+
+    def __init__(self, model_dir: str | Path) -> None:
+        self._model_dir = Path(model_dir)
+        self._model: Any = None
+
+    def is_available(self) -> bool:
+        try:
+            import vosk  # noqa: F401
+        except ImportError:
+            return False
+        return self._model_dir.is_dir()
+
+    def _load(self) -> Any:
+        if self._model is None:
+            try:
+                from vosk import Model
+            except ImportError as exc:
+                raise VoiceValidationError(
+                    "vosk engine needs the 'vosk' package (pip install vosk)"
+                ) from exc
+            if not self._model_dir.is_dir():
+                raise VoiceValidationError(
+                    f"vosk model not found: {self._model_dir} "
+                    "(download the small-en model into {models_dir}/vosk/)"
+                )
+            try:
+                self._model = Model(str(self._model_dir))
+            except Exception as exc:
+                raise VoiceValidationError(f"vosk model failed to load: {exc}") from exc
+        return self._model
+
+    def transcribe_text(self, text: str) -> tuple[str, dict[str, Any]]:
+        raise VoiceValidationError("vosk transcribes audio, not text (use --audio-path)")
+
+    def transcribe_audio(self, audio: bytes) -> tuple[str, dict[str, Any]]:
+        import json
+
+        sample_rate, channels, bits, pcm = parse_wav_pcm(audio)
+        if sample_rate != 16000 or channels != 1 or bits != 16:
+            raise VoiceValidationError(
+                "vosk needs 16 kHz mono 16-bit PCM WAV "
+                f"(got {sample_rate} Hz, {channels} ch, {bits}-bit)"
+            )
+        try:
+            from vosk import KaldiRecognizer
+        except ImportError as exc:
+            raise VoiceValidationError(
+                "vosk engine needs the 'vosk' package (pip install vosk)"
+            ) from exc
+        model = self._load()
+        recognizer = KaldiRecognizer(model, 16000)
+        for offset in range(0, len(pcm), 4000):
+            recognizer.AcceptWaveform(pcm[offset : offset + 4000])
+        try:
+            text = " ".join(json.loads(recognizer.FinalResult()).get("text", "").split())
+        except (ValueError, AttributeError) as exc:
+            raise VoiceValidationError(f"vosk returned an unreadable result: {exc}") from exc
+        if not text:
+            raise VoiceValidationError("vosk recognized no speech in this audio")
+        return (text, {"source": "vosk", "sample_rate": sample_rate, "audio_bytes": len(audio)})
 
 
 class STTManager:

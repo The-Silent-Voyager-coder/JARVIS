@@ -16,10 +16,14 @@ classifiers = [
 ]
 
 # Dependency policy: docs/DEPENDENCY_POLICY.md
-# Phase 1: PyYAML is the only runtime dependency (required for the documented
-# YAML configuration format). Every future addition requires written justification.
+# PyYAML is required for the documented YAML configuration format.
+# Every future addition requires written justification (§5 table).
 dependencies = [
     "PyYAML>=6.0",
+    # Roadmap Phase A (real local voice): Vosk offline STT + Piper neural TTS.
+    # Both run fully offline on Windows with model files under C:/JARVIS/models.
+    "vosk>=0.3.45",
+    "piper-tts>=1.8.0",
 ]
 
 [project.optional-dependencies]
@@ -56,3 +60,11 @@ no_implicit_optional = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 check_untyped_defs = true
+
+# Third-party voice/ML stubs target newer Pythons than our 3.11 floor
+# (or ship none at all); our code is unaffected, so skip them.
+[[tool.mypy.overrides]]
+module = ["vosk", "piper.*", "numpy", "numpy.*", "onnxruntime.*", "google.protobuf.*"]
+ignore_errors = true
+ignore_missing_imports = true
+follow_imports = "skip"

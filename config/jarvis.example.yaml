@@ -46,6 +46,13 @@ memory:
   auto_save_conversations: false
   default_confidence: 0.8
   retention_days: 365
+  # Semantic recall (roadmap Phase B): embed saves via a local Ollama
+  # embedding model and rank `memory search --semantic` by similarity.
+  # Vectors never leave the machine. Needs the model pulled once:
+  #   ollama pull nomic-embed-text
+  embeddings_enabled: false
+  embedding_model: "nomic-embed-text"
+  embedding_base_url: "http://127.0.0.1:11434"
 
 tasks:
   max_iterations: 10
@@ -126,6 +133,24 @@ task:
   total_timeout_seconds: 600
   database_path: "C:/JARVIS/data/tasks.db"
 
+scheduler:
+  # Bounded recurring jobs (roadmap Phase C) — tick via `jarvis schedule tick`
+  # (directly or from Windows Task Scheduler). No daemon.
+  enabled: true
+  max_schedules: 50
+  database_path: "C:/JARVIS/data/scheduler.db"
+
+telegram:
+  # Remote chat: message the bot from anywhere; the laptop stays home online.
+  # 1. Create a bot with @BotFather, 2. export TELEGRAM_BOT_TOKEN (never commit
+  # it), 3. message the bot once, read your chat id from
+  # https://api.telegram.org/bot<TOKEN>/getUpdates, 4. list it below.
+  enabled: false
+  token_env: "TELEGRAM_BOT_TOKEN"
+  allowed_chat_ids: []
+  poll_timeout_seconds: 20
+  max_listen_seconds: 600
+
 security:
   # Tool-system security mode: lockdown | normal | development
   # lockdown: SAFE tools only. normal: SAFE/LOW auto, MEDIUM/HIGH ask.
@@ -138,13 +163,18 @@ security:
   audit_log: "C:/JARVIS/data/audit.log"
 
 voice:
+  # Mocks by default (deterministic, no downloads). Real local engines:
+  # stt vosk (needs: pip install vosk + model in {models_dir}/vosk/),
+  # tts piper (needs: pip install piper-tts + voice in {models_dir}/piper/),
+  # wake_word fuzzy (stdlib, tolerant text match). Missing pieces report
+  # unavailable in `voice health` instead of failing silently.
   wake_word:
     enabled: false
-    model: "openwakeword"
+    model: "keyword"
   stt:
-    engine: "faster-whisper"
+    engine: "mock"
     model: "small"
     language: "en"
   tts:
-    engine: "piper"
-    voice: "en_US-lessac-medium"
+    engine: "mock"
+    voice: "en_GB-alan-medium"

@@ -23,6 +23,7 @@ from typing import Any
 from jarvis.exceptions import MemoryDatabaseError, MemoryNotFoundError
 from jarvis.memory.models import Memory, MemoryFilter, MemoryType, utcnow
 from jarvis.memory.repository import MemoryRepository, RepositoryHealth
+from jarvis.storage.recovery import quarantine_corrupt_file
 
 # Alias so the `list`/`search` method names do not shadow the builtin `list`
 # inside their own class-scope annotations (mypy valid-type).
@@ -32,7 +33,7 @@ QueryParts = tuple[str, list[Any]]
 
 log = logging.getLogger("jarvis.memory.repository")
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 MIGRATIONS: dict[int, list[str]] = {
     # Bootstrap: schema version 0 -> 1 (fresh database).
@@ -65,6 +66,19 @@ MIGRATIONS: dict[int, list[str]] = {
         "CREATE INDEX idx_memories_source ON memories(source)",
         "CREATE INDEX idx_memories_provenance ON memories(provenance)",
         "CREATE INDEX idx_memories_session ON memories(session_id) WHERE session_id IS NOT NULL",
+    ],
+    # Roadmap Phase B: embedding vectors live beside their memories.
+    1: [
+        """
+        CREATE TABLE IF NOT EXISTS memory_embeddings (
+            memory_id TEXT PRIMARY KEY REFERENCES memories(id) ON DELETE CASCADE,
+            model     TEXT NOT NULL,
+            dim       INTEGER NOT NULL,
+            vector    TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_embeddings_model ON memory_embeddings(model)",
     ],
 }
 
@@ -167,9 +181,11 @@ class SqliteMemoryRepository(MemoryRepository):
                 raise
             except sqlite3.DatabaseError as exc:
                 self._close_conn()
+                saved = quarantine_corrupt_file(self._path, reason=f"open failed: {exc}")
+                hint = f" (quarantined copy: {saved})" if saved else ""
                 raise MemoryDatabaseError(
                     f"memory database is corrupted or unreadable (file kept as-is): "
-                    f"{self._path} ({exc})"
+                    f"{self._path} ({exc}){hint}"
                 ) from exc
             except OSError as exc:
                 self._close_conn()
@@ -194,8 +210,10 @@ class SqliteMemoryRepository(MemoryRepository):
     def _validate_or_repair_schema(self, conn: sqlite3.Connection) -> None:
         integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
         if integrity != "ok":
+            saved = quarantine_corrupt_file(self._path, reason="integrity_check failed")
+            hint = f" (quarantined copy: {saved})" if saved else ""
             raise MemoryDatabaseError(
-                f"memory database failed integrity check (file kept as-is): {self._path}"
+                f"memory database failed integrity check (file kept as-is): {self._path}{hint}"
             )
         current = self._read_schema_version(conn)
         if current > SCHEMA_VERSION:
@@ -354,6 +372,82 @@ class SqliteMemoryRepository(MemoryRepository):
                     (_encode_dt(deleted_at), memory_id),
                 )
             return cursor.rowcount > 0
+
+    # --- embeddings ------------------------------------------------------
+
+    def save_embedding(self, memory_id: str, model: str, vector: list[float]) -> None:
+        with self._lock:
+            conn = self._conn_or_raise()
+            with conn:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO memory_embeddings
+                    (memory_id, model, dim, vector, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        memory_id, model, len(vector),
+                        _encode_json([float(v) for v in vector]),
+                        _encode_dt(utcnow()),
+                    ),
+                )
+
+    def get_embedding(self, memory_id: str) -> tuple[str, list[float]] | None:
+        with self._lock:
+            row = (
+                self._conn_or_raise()
+                .execute(
+                    "SELECT model, vector FROM memory_embeddings WHERE memory_id = ?",
+                    (memory_id,),
+                )
+                .fetchone()
+            )
+        if row is None:
+            return None
+        raw = _decode_json(str(row["vector"]), [])
+        if not isinstance(raw, list):
+            return None
+        return str(row["model"]), [float(v) for v in raw]
+
+    def delete_embedding(self, memory_id: str) -> None:
+        with self._lock:
+            conn = self._conn_or_raise()
+            with conn:
+                conn.execute("DELETE FROM memory_embeddings WHERE memory_id = ?", (memory_id,))
+
+    def list_embeddings(self, model: str) -> dict[str, list[float]]:
+        with self._lock:
+            rows = (
+                self._conn_or_raise()
+                .execute(
+                    "SELECT e.memory_id AS id, e.vector AS vector FROM memory_embeddings e "
+                    "JOIN memories m ON m.id = e.memory_id "
+                    "WHERE e.model = ? AND m.deleted_at IS NULL",
+                    (model,),
+                )
+                .fetchall()
+            )
+        out: dict[str, list[float]] = {}
+        for row in rows:
+            raw = _decode_json(str(row["vector"]), [])
+            if isinstance(raw, list) and raw:
+                out[str(row["id"])] = [float(v) for v in raw]
+        return out
+
+    def missing_embeddings(self, model: str, limit: int = 500) -> list[str]:
+        with self._lock:
+            rows = (
+                self._conn_or_raise()
+                .execute(
+                    "SELECT m.id AS id FROM memories m "
+                    "LEFT JOIN memory_embeddings e ON e.memory_id = m.id AND e.model = ? "
+                    "WHERE m.deleted_at IS NULL AND e.memory_id IS NULL "
+                    "ORDER BY m.created_at DESC LIMIT ?",
+                    (model, max(0, limit)),
+                )
+                .fetchall()
+            )
+        return [str(row["id"]) for row in rows]
 
     # --- retrieval ------------------------------------------------------
 

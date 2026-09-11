@@ -1,14 +1,16 @@
-"""Wake-word stub (Phase 6).
+"""Wake-word matching (Phase 6 + fuzzy variant).
 
-Stdlib only, zero-cost, local-first: a deterministic keyword match over
-a bounded text window. No audio DSP, no model, no network is ever
-required. A real on-device detector may replace the matcher behind the
-same `WakeWordDetector` ABC without changing callers.
+`keyword`: exact substring match (stdlib, always available).
+`fuzzy`: exact match plus difflib tolerance for STT mishearings
+("jervis", "jarvis please" fragments) with the alias list below.
+Neither needs audio DSP, models, or network.
 """
 
 from __future__ import annotations
 
+import difflib
 import logging
+import re
 from abc import ABC, abstractmethod
 
 from jarvis.exceptions import VoiceValidationError
@@ -16,6 +18,22 @@ from jarvis.voice.limits import VoiceLimits, default_limits
 from jarvis.voice.models import VoiceBackend, WakeResult, redact_text
 
 log = logging.getLogger("jarvis.voice.wakeword")
+
+FUZZY_RATIO = 0.78
+WAKE_ALIASES: tuple[str, ...] = (
+    "joris",
+    "charis",
+    "chavis",
+    "jar is",
+    "jaivis",
+    "jervis",
+    "jarvus",
+    "jarviz",
+    "javis",
+    "jairus",
+    "jarryst",
+    "chyrus",
+)
 
 
 class WakeWordDetector(ABC):
@@ -79,6 +97,78 @@ class KeywordWakeDetector(WakeWordDetector):
         log.debug(
             "wake check: detected=%s",
             detected,
+            extra={"component": "voice", "keyword": self._keyword},
+        )
+        _ = redact_text(text)
+        return result
+
+
+class FuzzyWakeDetector(WakeWordDetector):
+    """Keyword match tolerant to STT mishearings (stdlib difflib)."""
+
+    name = "fuzzy"
+
+    def __init__(
+        self,
+        keyword: str = "jarvis",
+        *,
+        limits: VoiceLimits | None = None,
+        aliases: tuple[str, ...] = WAKE_ALIASES,
+        ratio: float = FUZZY_RATIO,
+    ) -> None:
+        cleaned = (keyword or "").strip().lower()
+        if not cleaned:
+            raise VoiceValidationError("wake keyword must not be empty")
+        self._keyword = cleaned
+        self._aliases = tuple(a.strip().lower() for a in aliases if a.strip())
+        self._ratio = ratio
+        self._limits = limits or default_limits()
+
+    @property
+    def keyword(self) -> str:
+        return self._keyword
+
+    def is_available(self) -> bool:
+        return True
+
+    def check(self, text: str) -> WakeResult:
+        """Exact match (1.0) else best alias/token fuzzy ratio above threshold."""
+        if not isinstance(text, str):
+            raise VoiceValidationError("wake input must be a string")
+        if not text.strip():
+            raise VoiceValidationError("wake input must not be empty")
+        if len(text) > self._limits.max_wake_text_chars:
+            raise VoiceValidationError(
+                f"wake input is {len(text)} chars, over the "
+                f"{self._limits.max_wake_text_chars}-char limit"
+            )
+        lowered = text.lower()
+        clean = re.sub(r"[^a-z0-9 ]+", "", lowered)
+        if self._keyword in clean:
+            confidence = 1.0
+        else:
+            candidates = [self._keyword, *self._aliases]
+            tokens = clean.split()
+            best = 0.0
+            for candidate in candidates:
+                if candidate in clean:
+                    best = 1.0
+                    break
+                for token in tokens:
+                    score = difflib.SequenceMatcher(None, candidate, token).ratio()
+                    if score > best:
+                        best = score
+            confidence = best if best >= self._ratio else 0.0
+        result = WakeResult(
+            detected=confidence > 0.0,
+            keyword=self._keyword,
+            confidence=round(confidence, 3),
+            backend=VoiceBackend.OFFLINE,
+        )
+        result.validate()
+        log.debug(
+            "fuzzy wake check: detected=%s",
+            result.detected,
             extra={"component": "voice", "keyword": self._keyword},
         )
         _ = redact_text(text)

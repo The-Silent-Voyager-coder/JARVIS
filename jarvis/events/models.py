@@ -103,6 +103,16 @@ VISION_FAILED = "VisionFailed"
 VOICE_SPOKEN = "VoiceSpoken"
 VOICE_FAILED = "VoiceFailed"
 
+# Roadmap Phase C — scheduler (bounded local ticks, no daemon)
+SCHEDULE_CREATED = "ScheduleCreated"
+SCHEDULE_REMOVED = "ScheduleRemoved"
+SCHEDULE_RUN = "ScheduleRun"
+SCHEDULE_FAILED = "ScheduleFailed"
+
+# Remote chat (bounded Telegram polls, allowlisted chats only)
+TELEGRAM_RECEIVED = "TelegramReceived"
+TELEGRAM_REPLIED = "TelegramReplied"
+
 DOCUMENTED_EVENT_TYPES: frozenset[str] = frozenset(
     {
         USER_MESSAGE_RECEIVED,
@@ -181,6 +191,12 @@ DOCUMENTED_EVENT_TYPES: frozenset[str] = frozenset(
         VISION_FAILED,
         VOICE_SPOKEN,
         VOICE_FAILED,
+        SCHEDULE_CREATED,
+        SCHEDULE_REMOVED,
+        SCHEDULE_RUN,
+        SCHEDULE_FAILED,
+        TELEGRAM_RECEIVED,
+        TELEGRAM_REPLIED,
     }
 )
 

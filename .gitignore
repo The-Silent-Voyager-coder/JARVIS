@@ -52,6 +52,10 @@ workspaces/
 # --- Legacy reference projects (previous Jarvis models, local only) ---
 legacy/
 
+# --- Shelved research + housed side projects (local only) ---
+reference/
+projects/
+
 # --- Coverage / logs ---
 .coverage.*
 coverage.xml

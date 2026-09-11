@@ -32,7 +32,9 @@ if TYPE_CHECKING:
     from jarvis.intelligence.service import IntelligenceService
     from jarvis.memory.service import MemoryService
     from jarvis.planning.service import PlanningService
+    from jarvis.scheduler.service import SchedulerService
     from jarvis.task.service import TaskService
+    from jarvis.telegram.service import TelegramService
     from jarvis.tools.service import ToolService
     from jarvis.workspace.service import WorkspaceService
 
@@ -57,6 +59,8 @@ class Runtime:
         self._workspace: WorkspaceService | None = None
         self._planning: PlanningService | None = None
         self._task: TaskService | None = None
+        self._scheduler: SchedulerService | None = None
+        self._telegram: TelegramService | None = None
 
     @classmethod
     def create(cls, config_path: str | None = None) -> Runtime:
@@ -145,6 +149,18 @@ class Runtime:
         if self._task is None:
             raise LifecycleError("task service not initialized")
         return self._task
+
+    @property
+    def scheduler(self) -> SchedulerService:
+        if self._scheduler is None:
+            raise LifecycleError("scheduler service not initialized")
+        return self._scheduler
+
+    @property
+    def telegram(self) -> TelegramService:
+        if self._telegram is None:
+            raise LifecycleError("telegram service not initialized")
+        return self._telegram
 
     # --- lifecycle -----------------------------------------------------
 
@@ -244,6 +260,36 @@ class Runtime:
             task_service.start(self._config)
             task_service.register_health_check(health)
 
+            from jarvis.scheduler.handlers import make_briefing_handler, make_tool_handler
+            from jarvis.scheduler.service import SchedulerService
+
+            scheduler_service = SchedulerService()
+            self._scheduler = scheduler_service
+            scheduler_service.publisher = bus.publish_nowait
+            scheduler_service.start(self._config)
+            scheduler_service.register_health_check(health)
+            scheduler_service.register_handler("tool", make_tool_handler(tool_service))
+            scheduler_service.register_handler(
+                "briefing",
+                make_briefing_handler(
+                    memory=memory_service,
+                    task=task_service,
+                    planning=planning_service,
+                    overall_health=lambda: self.overall_health().value,
+                    allowed_roots=tuple(self._config.tools.allowed_roots),
+                    denied_roots=tuple(self._config.tools.denied_roots),
+                    working_directory=self._config.tools.working_directory,
+                ),
+            )
+
+            from jarvis.telegram.service import TelegramService
+
+            telegram_service = TelegramService()
+            self._telegram = telegram_service
+            telegram_service.publisher = bus.publish_nowait
+            telegram_service.start(self._config)
+            telegram_service.register_health_check(health)
+
             registry.start_all()
 
             await bus.publish(
@@ -272,6 +318,10 @@ class Runtime:
             self._lifecycle.transition(RuntimeState.STOPPING)
 
         bus = self._bus
+        if self._telegram is not None:
+            self._telegram.shutdown()
+        if self._scheduler is not None:
+            self._scheduler.shutdown()
         if self._task is not None:
             self._task.shutdown()
         if self._planning is not None:

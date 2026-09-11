@@ -295,14 +295,19 @@ jarvis memory list [--config PATH] [--json] [--content] [filters] [--limit N] [-
 jarvis memory get ID [--config PATH] [--json] [--content] [--include-expired] [--include-deleted]
 jarvis memory delete ID [--config PATH] [--json]    → auditable soft delete
 jarvis memory delete [filters] --yes [--config PATH] [--json]  → bulk (needs a filter + --yes)
-jarvis memory search QUERY [--config PATH] [--json] [--content] [filters]
+jarvis memory search QUERY [--config PATH] [--json] [--content] [--semantic] [filters]
 # shared filters: --type, --source, --provenance, --min-confidence,
 #                 --session, --include-expired, --include-deleted
+jarvis memory digest [--days N] [--session SID] [--config PATH] [--json] [--content]
+jarvis memory reindex [--limit N] [--config PATH] [--json]
 jarvis tools list [--config PATH] [--json]                 → registered tools
 jarvis tools info ID [--config PATH] [--json]              → one declaration
 jarvis tools health [--config PATH] [--json]               → service + mode
 jarvis tools execute ID [key=value ...] [--approve] [--json]
                         [--session-id SID] [--config PATH] → full pipeline
+jarvis briefing [--days N] [--content] [--config PATH] [--json]
+jarvis schedule add|list|remove|tick|health [--config PATH] [--json]
+jarvis telegram health|listen [--once] [--for SECONDS] [--config PATH] [--json]
 ```
 
 Exit codes: `0` success, `1` general failure (e.g. runtime failed to start,

@@ -18,6 +18,8 @@ from jarvis.memory.models import Memory, MemoryFilter
 # `list` inside their own class-scope annotations (mypy valid-type).
 MemoryList = list[Memory]
 MemoryIdList = list[str]
+FloatVector = list[float]
+EmbeddingMap = dict[str, list[float]]
 
 
 @dataclass(frozen=True)
@@ -112,3 +114,25 @@ class MemoryRepository(ABC):
     @abstractmethod
     def stats(self) -> dict[str, Any]:
         """Counts by type plus subsystem state (fts, schema version)."""
+
+    # --- embeddings (roadmap Phase B; optional per backend) --------------
+
+    def save_embedding(self, memory_id: str, model: str, vector: FloatVector) -> None:
+        """Store (or replace) the embedding vector for one memory."""
+        raise NotImplementedError("embeddings unsupported by this repository")
+
+    def get_embedding(self, memory_id: str) -> tuple[str, FloatVector] | None:
+        """Return (model, vector) for one memory, or None when absent."""
+        raise NotImplementedError("embeddings unsupported by this repository")
+
+    def delete_embedding(self, memory_id: str) -> None:
+        """Drop the embedding vector for one memory (no-op when absent)."""
+        raise NotImplementedError("embeddings unsupported by this repository")
+
+    def list_embeddings(self, model: str) -> EmbeddingMap:
+        """All stored vectors for one embedding model ({memory_id: vector})."""
+        raise NotImplementedError("embeddings unsupported by this repository")
+
+    def missing_embeddings(self, model: str, limit: int = 500) -> MemoryIdList:
+        """Ids of live memories with no vector for `model` (reindex backlog)."""
+        raise NotImplementedError("embeddings unsupported by this repository")

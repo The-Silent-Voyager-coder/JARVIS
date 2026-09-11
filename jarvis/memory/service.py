@@ -33,6 +33,11 @@ from jarvis.exceptions import (
     MemoryUnavailableError,
     MemoryValidationError,
 )
+from jarvis.memory.embeddings import (
+    DEFAULT_EMBEDDING_MODEL,
+    OllamaEmbeddingProvider,
+    cosine_similarity,
+)
 from jarvis.memory.models import (
     Memory,
     MemoryContent,
@@ -41,6 +46,7 @@ from jarvis.memory.models import (
     MemoryType,
     Provenance,
     RankedMemory,
+    content_text,
     new_memory_id,
     utcnow,
 )
@@ -171,6 +177,7 @@ class MemoryService:
         memory.validate()
         repository = self._require_available()
         repository.create(memory)
+        self._maybe_embed(memory)
         self._publish(
             MEMORY_CREATED,
             {
@@ -253,12 +260,18 @@ class MemoryService:
         include_deleted: bool = False,
         limit: int | None = None,
         offset: int = 0,
+        semantic: bool = False,
     ) -> MemoryRetrieval:
         """Deterministic retrieval with filtering + documented ranking (§19-22).
 
         Defaults exclude expired and deleted memories; expired/deleted are
         explicitly inspectable via flags. Results keep IDs, provenance, and a
         match reason.
+
+        `semantic=True` ranks by cosine similarity against stored embedding
+        vectors instead of text matching. It requires `memory.embeddings_enabled`
+        and a reachable backend — both failures raise instead of silently
+        falling back to text search.
         """
         if query is not None and not str(query).strip():
             raise MemoryValidationError("search query must be a non-empty string")
@@ -281,6 +294,14 @@ class MemoryService:
             raise MemoryValidationError("offset must be >= 0")
 
         repository = self._require_available()
+        if semantic:
+            return self._retrieve_semantic(
+                repository,
+                str(query).strip() if query else "",
+                filters,
+                limit=limit,
+                offset=offset,
+            )
         if query is not None:
             matches = repository.search(query, filters)
             reason = f"query match: {query}"
@@ -351,6 +372,12 @@ class MemoryService:
         )
         updated.validate()
         repository.update(updated)
+        if content is not _MISSING:
+            try:
+                repository.delete_embedding(updated.id)
+            except NotImplementedError:
+                pass
+            self._maybe_embed(updated)
         self._publish(
             MEMORY_UPDATED,
             {
@@ -371,6 +398,10 @@ class MemoryService:
             raise MemoryNotFoundError(f"memory not found: {memory_id}")
         if not repository.delete(memory_id, utcnow()):
             raise MemoryNotFoundError(f"memory not found: {memory_id}")
+        try:
+            repository.delete_embedding(memory_id)  # vectors die with the memory
+        except NotImplementedError:
+            pass
         self._publish(
             MEMORY_DELETED,
             {
@@ -432,10 +463,23 @@ class MemoryService:
             repo = self._repository.health().to_dict()
         else:
             repo = {}
+        embeddings: dict[str, Any] = {"enabled": False}
+        if self._config is not None and self._config.memory.embeddings_enabled:
+            embeddings = {"enabled": True, "model": self._config.memory.embedding_model}
+            try:
+                probe = OllamaEmbeddingProvider(
+                    self._config.memory.embedding_base_url,
+                    self._config.memory.embedding_model or DEFAULT_EMBEDDING_MODEL,
+                    timeout_seconds=5.0,
+                ).health()
+                embeddings.update(probe)
+            except Exception as exc:  # pragma: no cover - defensive
+                embeddings.update({"available": False, "detail": str(exc)[:200]})
         return {
             "available": self.availability == "healthy",
             "status": self.availability,
             "detail": self.detail,
+            "embeddings": embeddings,
             **repo,
         }
 
@@ -485,6 +529,138 @@ class MemoryService:
             if days > 0:
                 return utcnow() + timedelta(days=days)
         return None
+
+    def reindex_embeddings(self, limit: int = 500) -> dict[str, Any]:
+        """Backfill vectors for live memories missing them (explicit action).
+
+        Returns {model, embedded, failed, skipped}. Backend failures are
+        counted, never raised; a disabled subsystem raises
+        MemoryValidationError instead of pretending to work.
+        """
+        provider = self._embedding_provider(required=True)
+        assert provider is not None
+        repository = self._require_available()
+        model = provider.model
+        try:
+            backlog = repository.missing_embeddings(model, limit=max(0, limit))
+        except NotImplementedError as exc:
+            raise MemoryUnavailableError("embeddings unsupported by this repository") from exc
+        embedded = failed = 0
+        for memory_id in backlog:
+            memory = repository.get(memory_id)
+            if memory is None:
+                continue
+            try:
+                vectors = provider.embed([content_text(memory.content)])
+                repository.save_embedding(memory_id, model, vectors[0])
+                embedded += 1
+            except MemoryUnavailableError:
+                failed += 1
+            except NotImplementedError:
+                raise MemoryUnavailableError("embeddings unsupported by this repository")
+        return {"model": model, "embedded": embedded, "failed": failed, "skipped": 0}
+
+    def _embedding_provider(self, *, required: bool) -> OllamaEmbeddingProvider | None:
+        """Build the embedding backend when enabled; None (or raise) otherwise."""
+        if self._config is None or not self._config.memory.embeddings_enabled:
+            if required:
+                raise MemoryValidationError(
+                    "semantic recall needs memory.embeddings_enabled=true"
+                )
+            return None
+        return OllamaEmbeddingProvider(
+            self._config.memory.embedding_base_url,
+            self._config.memory.embedding_model or DEFAULT_EMBEDDING_MODEL,
+        )
+
+    def _maybe_embed(self, memory: Memory) -> None:
+        """Best-effort vector write after a save; failures degrade silently."""
+        try:
+            provider = self._embedding_provider(required=False)
+            if provider is None:
+                return
+            repository = self._require_available()
+            vectors = provider.embed([content_text(memory.content)])
+            repository.save_embedding(memory.id, provider.model, vectors[0])
+        except MemoryUnavailableError as exc:
+            log.warning(
+                "embedding write skipped for %s: %s",
+                memory.id,
+                exc,
+                extra={"component": "memory"},
+            )
+        except NotImplementedError:
+            log.debug("embeddings unsupported by repository", extra={"component": "memory"})
+
+    def _retrieve_semantic(
+        self,
+        repository: MemoryRepository,
+        query: str,
+        filters: MemoryFilter,
+        *,
+        limit: int | None,
+        offset: int,
+    ) -> MemoryRetrieval:
+        if not query:
+            raise MemoryValidationError("semantic search needs a non-empty query")
+        provider = self._embedding_provider(required=True)
+        assert provider is not None
+        vectors = provider.embed([query])
+        try:
+            stored = repository.list_embeddings(provider.model)
+        except NotImplementedError as exc:
+            raise MemoryUnavailableError("embeddings unsupported by this repository") from exc
+        scored: list[tuple[float, str]] = sorted(
+            (
+                (cosine_similarity(vectors[0], vector), memory_id)
+                for memory_id, vector in stored.items()
+            ),
+            reverse=True,
+        )[:5000]
+        now = utcnow()
+        ranked: list[RankedMemory] = []
+        for similarity, memory_id in scored:
+            if similarity <= 0.0:
+                break
+            memory = repository.get(
+                memory_id,
+                include_expired=filters.include_expired,
+                include_deleted=filters.include_deleted,
+            )
+            if memory is None:
+                continue
+            if filters.memory_type is not None and memory.memory_type != filters.memory_type:
+                continue
+            if filters.session_id is not None and memory.session_id != filters.session_id:
+                continue
+            age_seconds = max((now - memory.created_at).total_seconds(), 0.0)
+            recency = 1.0 / (1.0 + age_seconds / DAY_SECONDS)
+            score = (
+                RANK_RELEVANCE * similarity
+                + RANK_CONFIDENCE * float(memory.confidence)
+                + RANK_RECENCY * recency
+            )
+            ranked.append(
+                RankedMemory(memory=memory, score=score, match_reason=f"semantic match: {query}")
+            )
+        ranked.sort(key=lambda item: (-item.score, -item.memory.created_at.timestamp()))
+        total = len(ranked)
+        if limit is not None:
+            ranked = ranked[offset : offset + limit]
+        else:
+            ranked = ranked[offset:]
+        self._publish(
+            MEMORY_RETRIEVED,
+            {
+                "query": query,
+                "count": len(ranked),
+                "total": total,
+                "ids": [item.memory.id for item in ranked][:20],
+                "session_id": filters.session_id,
+                "mode": "semantic",
+            },
+        )
+        return MemoryRetrieval(items=ranked, total=total)
 
     def _rank(self, memories: list[Memory], reason: str) -> list[RankedMemory]:
         now = utcnow()

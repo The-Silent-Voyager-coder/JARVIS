@@ -36,7 +36,7 @@ same code path.
 | `ToolContext` | `working_directory`, `environment` (scrubbed), `timeout_seconds`, `max_output_bytes` — built by the service from config |
 | `ToolResult` | `request_id`, `tool_id`, `success`, `output`, `error`, `metadata`, `duration_ms` |
 | `ToolRisk` | `safe` / `low` / `medium` / `high` / `critical` |
-| `ToolCategory` | `filesystem`, `process`, `system`, `shell` (implemented); `network`, `browser`, `gui` reserved for later phases |
+| `ToolCategory` | `filesystem`, `process`, `system`, `shell` (implemented); `network`, `gui` (implemented, roadmap); `browser` reserved for a later phase |
 | `ToolDecision` | `allow` / `ask` / `deny` |
 | `ApprovalOutcome` | `approved` / `denied` / `timeout` / `cancelled` |
 
@@ -162,9 +162,25 @@ the request is denied — a fail-closed default.
 | `system.info` | safe | OS/CPU/RAM/storage/GPU/JARVIS version (read-only) |
 | `shell.execute` | high* | run a command with explicit argv; `*` final risk after classifier |
 
+## 7b. Built-in Tools (roadmap additions)
+
+| Tool | Risk | Purpose |
+|---|---|---|
+| `network.fetch` | medium | bounded read-only HTTP(S) GET; text only, no credentials, binary refused |
+| `homeassistant.states` | low | read entity states (needs `HA_BASE_URL` + `HA_TOKEN` env) |
+| `homeassistant.call` | high | invoke a service — acts on the home, always ASK-gated |
+| `gui.screenshot` | medium | capture primary monitor; metadata unless saved inside allowed roots |
+| `gui.click` | high | click at coordinates (Windows-only, always ASK-gated) |
+| `gui.type` | high | type into focused window, capped (Windows-only, always ASK-gated) |
+
+Game-automation note: the `gui.*` tools are hands, not a player. Botting
+violates most games' terms (Supercell bans CoC botting accounts), so
+unattended game loops need explicit per-game operator approval — see
+`docs/ROADMAP.md` rule 6. There is deliberately no silent auto-play path.
+
 Intentional absences: **no `filesystem.delete`/`remove` tool** and **no
-`process.terminate`/`kill` tool** (spec §20, §22). `network`/`browser`/`gui`
-categories are reserved for later phases.
+`process.terminate`/`kill` tool** (spec §20, §22). The `browser`
+category remains reserved for a later phase.
 
 ## 8. Configuration
 
@@ -237,6 +253,7 @@ inside a tool becomes a failed result with `error`, never a crashed process.
 
 The AI tool-calling loop (model chooses tools from `AIRequest.tools`) shipped
 as Phase 5A (`docs/AGENTS.md`) and OpenCode delegation of tool calls shipped
-as Phase 5B (`jarvis/delegation/`). Network/browser/GUI tools remain reserved
-for later phases. Deleting files and killing processes
-are intentionally impossible through the tool system.
+as Phase 5B (`jarvis/delegation/`). Network tools (`network.fetch`,
+`homeassistant.*`) and GUI tools (`gui.*`) shipped as roadmap additions
+(§7b); the `browser` category remains reserved. Deleting files and killing
+processes are intentionally impossible through the tool system.

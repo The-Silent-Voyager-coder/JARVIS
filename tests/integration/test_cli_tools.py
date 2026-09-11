@@ -101,7 +101,7 @@ def test_tools_health(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> Non
     assert "J.A.R.V.I.S. Tool Health" in out
     assert "status    healthy" in out
     assert "mode      normal" in out
-    assert "tools     9" in out
+    assert "tools     15" in out
 
 
 def test_tools_health_json(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -110,7 +110,7 @@ def test_tools_health_json(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -
     assert code == EXIT_OK
     out = capsys.readouterr().out
     assert '"available": true' in out
-    assert '"tool_count": 9' in out
+    assert '"tool_count": 15' in out
 
 
 def test_tools_execute_safe_tool(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

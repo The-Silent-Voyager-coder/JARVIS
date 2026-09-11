@@ -53,6 +53,9 @@ DEFAULTS: dict[str, object] = {
         "auto_save_conversations": False,
         "default_confidence": 0.8,
         "retention_days": 365,
+        "embeddings_enabled": False,
+        "embedding_model": "nomic-embed-text",
+        "embedding_base_url": "http://127.0.0.1:11434",
     },
     "tasks": {
         "max_iterations": 10,
@@ -105,6 +108,18 @@ DEFAULTS: dict[str, object] = {
         "total_timeout_seconds": 600.0,
         "database_path": "C:/JARVIS/data/tasks.db",
     },
+    "scheduler": {
+        "enabled": True,
+        "max_schedules": 50,
+        "database_path": "C:/JARVIS/data/scheduler.db",
+    },
+    "telegram": {
+        "enabled": False,
+        "token_env": "TELEGRAM_BOT_TOKEN",
+        "allowed_chat_ids": [],
+        "poll_timeout_seconds": 20.0,
+        "max_listen_seconds": 600.0,
+    },
     "security": {
         "mode": "normal",
         "default_mode": "ask",
@@ -113,8 +128,11 @@ DEFAULTS: dict[str, object] = {
         "audit_log": "C:/JARVIS/data/audit.log",
     },
     "voice": {
-        "wake_word": {"enabled": False, "model": "openwakeword"},
-        "stt": {"engine": "faster-whisper", "model": "small", "language": "en"},
-        "tts": {"engine": "piper", "voice": "en_US-lessac-medium"},
+        # Deterministic mocks by default (offline, no downloads). Real local
+        # engines are opt-in: stt vosk | faster-whisper, tts piper,
+        # wake_word fuzzy. Missing packages/models report unavailable.
+        "wake_word": {"enabled": False, "model": "keyword"},
+        "stt": {"engine": "mock", "model": "small", "language": "en"},
+        "tts": {"engine": "mock", "voice": "en_GB-alan-medium"},
     },
 }

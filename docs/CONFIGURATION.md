@@ -33,11 +33,15 @@ Top-level sections:
 | `logging.*` | level, format, retention |
 | `events.*` | bus queue size, worker count |
 | `ai.*` | default provider, provider registry (local/opencode), endpoints, timeouts |
-| `memory.*` | SQLite path, enable flag, auto-save policy, default confidence, retention |
+| `memory.*` | SQLite path, enable flag, auto-save policy, default confidence, retention, embeddings (model/base_url/enable) |
 | `tasks.*` | max iterations, default timeout, persist interval |
+| `task.*` | bounded multi-step execution limits + database path |
+| `workspace.*` / `planning.*` | discovery scanner / deterministic planner limits + database paths |
+| `scheduler.*` | enable flag, max schedules ceiling-guarded, database path |
+| `telegram.*` | enable flag, token env name, allowlisted chat ids, poll/listen bounds |
 | `tools.*` | working directory, execution timeout, output cap, allowed/denied roots, per-category default risk |
 | `security.*` | mode (`normal`/`lockdown`/`development`), auto-approve rules, audit log path |
-| `voice.*` | wake word / STT / TTS engine + model selections |
+| `voice.*` | wake word / STT / TTS engine + model selections (mock default; vosk/piper/fuzzy opt-in) |
 
 Unknown keys or invalid values → validation errors at startup.
 
@@ -288,3 +292,43 @@ add no new config sections by design: Phase 7 ships as
 `jarvis/planning/graph.py` + `verify.py` over the Phase 6 `planning:` /
 `task:` blocks, and Phase 9 ships as `tools/redaction.py` + policy
 tightening under the existing `security:` / `tools:` blocks.
+
+## 12. Scheduler / Telegram Sections (roadmap)
+
+```yaml
+scheduler:
+  enabled: true
+  max_schedules: 50          # ceiling 200, refused above it
+  database_path: C:/JARVIS/data/scheduler.db
+telegram:
+  enabled: false             # flip on after BotFather + allowlist (see below)
+  token_env: "TELEGRAM_BOT_TOKEN"
+  allowed_chat_ids: []       # your chat id(s) only; strangers get no reply
+  poll_timeout_seconds: 20   # ceiling 50
+  max_listen_seconds: 600    # ceiling 3600
+```
+
+Rules: `scheduler` follows the standard subsystem pattern (enabled gate +
+ceiling validation). `telegram` additionally fails `health` as unavailable
+until a token is present in the named env var AND at least one chat is
+allowlisted. The token never appears in files, logs, or events.
+
+CLI: `jarvis schedule add|list|remove|tick|health`,
+`jarvis telegram health|listen [--once] [--for SECONDS]`.
+
+## 13. Memory Embeddings (roadmap Phase B)
+
+```yaml
+memory:
+  # ... base keys as in §8 ...
+  embeddings_enabled: false
+  embedding_model: "nomic-embed-text"
+  embedding_base_url: "http://127.0.0.1:11434"
+```
+
+Rules: off by default; enabling requires the embedding model pulled once
+(`ollama pull nomic-embed-text`). Saves auto-embed best-effort (backend
+down = save stands, vector missing); explicit `--semantic` search fails
+loudly instead of falling back. Vectors live in the local
+`memory_embeddings` table and die with their memory (`forget`/`delete`).
+CLI: `jarvis memory search QUERY --semantic`, `jarvis memory reindex`.

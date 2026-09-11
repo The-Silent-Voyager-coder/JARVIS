@@ -12,8 +12,14 @@ from jarvis.configuration.model import SecurityMode
 from jarvis.exceptions import ConfigurationError
 
 
-def test_defaults_load_without_file(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_defaults_load_without_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.delenv("JARVIS_CONFIG_PATH", raising=False)
+    # Hermetic against an operator-owned config/jarvis.yaml (documented setup
+    # step): point the repo-root probe at a path that cannot exist.
+    monkeypatch.setattr(
+        "jarvis.configuration.loader.DEFAULT_CONFIG_PATH",
+        tmp_path / "absent.yaml",
+    )
     loaded = load_config()
     assert loaded.config_path is None
     assert loaded.source == "built-in defaults"

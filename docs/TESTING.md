@@ -220,8 +220,7 @@ Coverage:
 
 - **959 tests passing** (Sept 2026 baseline: `pytest tests -q` → 959 passed;
   README's older "732" figure predates the Phase 6–10 suites), `ruff check
-  jarvis tests` clean, `mypy jarvis` clean (111 source files).
-- New suites since §6d: `tests/unit/delegation/` (models, manager, service),
+  jarvis tests` clean, `mypy jarvis` clean (111 source files).- New suites since §6d: `tests/unit/delegation/` (models, manager, service),
   `tests/unit/planning/test_graph.py` + `test_verify.py` (Phase 7 DAG +
   verification gate), `tests/unit/voice/` (6 files, stub backends),
   `tests/unit/vision/` (7 files, stub backend, no OCR),
@@ -234,3 +233,21 @@ Coverage:
   memory|tasks|opencode` top-level layout in §2 remains aspirational).
 - Voice/vision suites assert stub honesty: mock STT/TTS, `[stub-no-ocr]`
   grounding marker, metadata-only capture — no model downloads, no network.
+## 6f. Roadmap baseline (scheduler, tools, telegram, embeddings, real voice)
+
+- **1035 tests passing** (Sept 2026: 959 + 76 new), `ruff` + `mypy` clean
+  (129 source files).
+- New: `tests/unit/scheduler/` (models, repo, tick executor),
+  `tests/integration/test_cli_schedule.py`,
+  `tests/unit/tools/test_network_tools.py` + `test_gui_tools.py`
+  (live click/type never exercised; screenshot live on Windows only),
+  `tests/unit/telegram/` + `test_cli_telegram.py` (faked Bot API),
+  `tests/unit/memory/test_memory_embeddings.py` (fake vectors; one
+  Ollama-live probe kept out of the suite),
+  `tests/unit/storage/test_recovery.py`,
+  `tests/unit/voice/test_real_backends.py` (Vosk/Piper guarded by
+  availability skips — CI-safe).
+- Hermeticity rule (learned the hard way): no test may depend on the
+  operator-owned `config/jarvis.yaml` existing or not —
+  `test_defaults_load_without_file` and `test_config_validate_defaults`
+  pin `DEFAULT_CONFIG_PATH` at a nonexistent path.

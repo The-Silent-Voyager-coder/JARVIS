@@ -26,8 +26,9 @@ foundation; Phase 4 adds the permissioned tool system on top of all three:
 - **One security pipeline, no bypass**: AI → `ToolRequest` → registry →
   security policy (ALLOW/ASK/DENY) → approval → execution → audit events.
   The CLI `tools execute` command drives the identical code path.
-- **Typed tool registry**: 9 built-in tools (`filesystem.list|stat|read|
-  mkdir|write`, `process.list|info`, `system.info`, `shell.execute`) with
+- **Typed tool registry**: 15 built-in tools (`filesystem.list|stat|read|
+  mkdir|write`, `process.list|info`, `system.info`, `shell.execute`,
+  `network.fetch`, `homeassistant.states|call`, `gui.screenshot|click|type`) with
   declared risk levels and JSON-schema validation; duplicate ids and invalid
   schemas are rejected at registration
 - **Risk levels + modes**: `safe`/`low`/`medium`/`high`/`critical` with a
@@ -98,7 +99,7 @@ Phase 5B adds controlled OpenCode delegation under full JARVIS authority:
 - **Hard-bounded execution**: `max_wall_time_seconds` (1800s default, 7200s ceiling), `max_output_bytes` (4 MiB/32 MiB), `max_permission_requests` (50/200), `max_session_count` (3/10), `max_delegation_depth` (1 — no recursion), `SSE_RECONNECT_LIMIT` (3) — validated at config load and re-validated per run.
 - **Full lifecycle**: `DelegationState` (`created → starting → running ⇄ waiting_for_permission → completing → completed/failed/cancelled/timed_out`), bounded SSE with malformed-event tolerance, timeout/cancellation/diff retrieval, session cleanup, and `DELEGATION_*` + `TOOL_*` audit events (no prompts, no secrets).
 - **CLI**: `jarvis delegation health|list|get <task_id>|cancel <task_id> [--json]` (same auth path as `jarvis agent`/`tools`).
-- **Tests**: 959 passing (Sept 2026 baseline; incl. 55 delegation, 32 OpenCode),
+- **Tests**: 1035 passing (Sept 2026 baseline; incl. 55 delegation, 32 OpenCode),
   `ruff`/`mypy` clean.
 
 ## Development Phases
@@ -201,6 +202,14 @@ python -m venv .venv
 .\.venv\Scripts\jarvis.exe delegation get <task_id>
 .\.venv\Scripts\jarvis.exe delegation cancel <task_id>
 # delegation is provider-neutral, bounded, and always via JARVIS SecurityPolicy
+
+# recurring local jobs (no daemon — tick directly or from Task Scheduler)
+.\.venv\Scripts\jarvis.exe schedule add --name morning --kind briefing --every 86400
+.\.venv\Scripts\jarvis.exe schedule tick
+
+# remote chat from your phone (needs TELEGRAM_BOT_TOKEN + allowlisted chat)
+.\.venv\Scripts\jarvis.exe telegram health
+.\.venv\Scripts\jarvis.exe telegram listen --once
 
 # run the test suite, linter, and type checker
 .\.venv\Scripts\python.exe -m pytest

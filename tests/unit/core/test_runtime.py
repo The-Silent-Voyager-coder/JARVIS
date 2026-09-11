@@ -130,6 +130,8 @@ def test_health_components_registered(valid_config_yaml: Path) -> None:
             "workspace": "HEALTHY",
             "planning": "HEALTHY",
             "task": "HEALTHY",
+            "scheduler": "HEALTHY",
+            "telegram": "HEALTHY",
             "intelligence": reports["intelligence"],  # env-dependent provider state
         }
         assert reports["intelligence"] in ("HEALTHY", "DEGRADED", "UNHEALTHY")

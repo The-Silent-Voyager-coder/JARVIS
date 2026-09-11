@@ -64,6 +64,10 @@ task:
   per_step_timeout_seconds: 30.0
   total_timeout_seconds: 600.0
   database_path: "{d}/data/tasks.db"
+scheduler:
+  enabled: true
+  max_schedules: 50
+  database_path: "{d}/data/scheduler.db"
 security:
   mode: "normal"
   default_mode: "ask"

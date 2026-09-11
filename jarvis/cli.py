@@ -77,10 +77,13 @@ from jarvis.exceptions import (
     JarvisError,
     MemoryError,
     MemoryNotFoundError,
+    MemoryUnavailableError,
     MemoryValidationError,
     PlanningUnavailableError,
     PlanningValidationError,
     ProviderCapabilityError,
+    SchedulerUnavailableError,
+    SchedulerValidationError,
     TaskUnavailableError,
     TaskValidationError,
     ToolNotFoundError,
@@ -128,6 +131,8 @@ COMPONENT_LABELS: dict[str, str] = {
     "workspace": "Workspace",
     "planning": "Planning",
     "task": "Task",
+    "scheduler": "Scheduler",
+    "telegram": "Telegram",
 }
 
 
@@ -250,6 +255,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     mem_search.add_argument("--json", action="store_true", help="machine-readable output")
     mem_search.add_argument("--content", action="store_true", help="include memory content")
+    mem_search.add_argument("--semantic", action="store_true", help="rank by embedding similarity (needs memory.embeddings_enabled)")  # noqa: E501
     _add_memory_filter_args(mem_search)
 
     mem_digest = memory_sub.add_parser(
@@ -269,6 +275,17 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         default=7,
         help="look back N days (must be >= 1; default 7)",
+    )
+
+    mem_reindex = memory_sub.add_parser(
+        "reindex", help="backfill embedding vectors for memories missing them"
+    )
+    mem_reindex.add_argument(
+        "--config", metavar="PATH", default=None, help="configuration file to use"
+    )
+    mem_reindex.add_argument("--json", action="store_true", help="machine-readable output")
+    mem_reindex.add_argument(
+        "--limit", metavar="N", type=int, default=500, help="max memories to embed (default 500)"
     )
 
     tools_parser = subparsers.add_parser("tools", help="tool commands")
@@ -476,6 +493,51 @@ def _build_parser() -> argparse.ArgumentParser:
     planning_health = planning_sub.add_parser("health", help="planning subsystem health")
     planning_health.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
     planning_health.add_argument("--json", action="store_true", help="machine-readable output")
+
+    schedule_parser = subparsers.add_parser("schedule", help="recurring local jobs (bounded ticks)")
+    schedule_sub = schedule_parser.add_subparsers(dest="schedule_command", metavar="SUBCOMMAND")
+
+    schedule_add = schedule_sub.add_parser("add", help="add a recurring schedule")
+    schedule_add.add_argument("--name", metavar="NAME", required=True, help="schedule name")
+    schedule_add.add_argument("--kind", metavar="KIND", required=True, help="briefing | tool")
+    schedule_add.add_argument("--every", metavar="SECONDS", type=int, required=True, help="interval in seconds (>= 60)")  # noqa: E501
+    schedule_add.add_argument("--days", metavar="N", type=int, default=1, help="briefing look-back days (briefing kind)")  # noqa: E501
+    schedule_add.add_argument("--out", metavar="PATH", default=None, help="briefing JSON output path (inside allowed roots)")  # noqa: E501
+    schedule_add.add_argument("--tool", metavar="TOOL_ID", default=None, help="tool id (tool kind)")  # noqa: E501
+    schedule_add.add_argument("--args", metavar="JSON", default="{}", help="tool arguments as JSON (tool kind)")  # noqa: E501
+    schedule_add.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    schedule_add.add_argument("--json", action="store_true", help="machine-readable output")
+
+    schedule_list = schedule_sub.add_parser("list", help="list schedules")
+    schedule_list.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    schedule_list.add_argument("--json", action="store_true", help="machine-readable output")
+
+    schedule_remove = schedule_sub.add_parser("remove", help="remove a schedule by id")
+    schedule_remove.add_argument("schedule_id", metavar="ID", help="schedule id")
+    schedule_remove.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    schedule_remove.add_argument("--json", action="store_true", help="machine-readable output")
+
+    schedule_tick = schedule_sub.add_parser("tick", help="run due schedules once (no daemon)")
+    schedule_tick.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    schedule_tick.add_argument("--json", action="store_true", help="machine-readable output")
+
+    schedule_health = schedule_sub.add_parser("health", help="scheduler subsystem health")
+    schedule_health.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    schedule_health.add_argument("--json", action="store_true", help="machine-readable output")
+
+    telegram_parser = subparsers.add_parser("telegram", help="remote chat bridge commands")
+    telegram_sub = telegram_parser.add_subparsers(dest="telegram_command", metavar="SUBCOMMAND")
+
+    telegram_health = telegram_sub.add_parser("health", help="telegram bridge health")
+    telegram_health.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    telegram_health.add_argument("--json", action="store_true", help="machine-readable output")
+
+    telegram_listen = telegram_sub.add_parser("listen", help="poll Telegram and answer allowlisted chats (bounded)")  # noqa: E501
+    telegram_listen.add_argument("--config", metavar="PATH", default=None, help="configuration file to use")  # noqa: E501
+    telegram_listen.add_argument("--json", action="store_true", help="machine-readable output")
+    telegram_listen.add_argument("--content", action="store_true", help="include memory content in /briefing replies")  # noqa: E501
+    telegram_listen.add_argument("--once", action="store_true", help="single poll round then exit")
+    telegram_listen.add_argument("--for", metavar="SECONDS", dest="for_seconds", type=float, default=300.0, help="listen budget in seconds")  # noqa: E501
 
     for hud_command, hud_help in (
         ("hud", "read-only HUD dashboard (all sections)"),
@@ -899,6 +961,7 @@ def _cmd_memory_search(args: argparse.Namespace) -> int:
                 **_memory_filter_kwargs(args),
                 "limit": args.limit,
                 "offset": args.offset,
+                "semantic": args.semantic,
             },
         )
     except MemoryError as exc:
@@ -910,6 +973,33 @@ def _cmd_memory_search(args: argparse.Namespace) -> int:
         runtime.memory, result.items, result.total,
         include_content=args.content, json_mode=args.json,
         header=f"J.A.R.V.I.S. Memory Search: {args.query!r}",
+    )
+    return EXIT_OK
+
+
+def _cmd_memory_reindex(args: argparse.Namespace) -> int:
+    if args.limit is None or args.limit < 1:
+        print("jarvis memory reindex: --limit must be an integer >= 1", file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        runtime = _memory_runtime(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            data = runtime.memory.reindex_embeddings(limit=args.limit)
+        except (MemoryValidationError, MemoryUnavailableError) as exc:
+            print(f"jarvis memory reindex: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK
+    print(
+        f"Reindexed {data.get('embedded', 0)} memories "
+        f"({data.get('failed', 0)} failed) with model {data.get('model', '-')})."
     )
     return EXIT_OK
 
@@ -1794,6 +1884,314 @@ def _cmd_planning_health(args: argparse.Namespace) -> int:
     return EXIT_OK if data.get("available", False) else EXIT_FAILURE
 
 
+# --- scheduler ------------------------------------------------------------
+
+
+def _cmd_schedule_add(args: argparse.Namespace) -> int:
+    from jarvis.scheduler.limits import MIN_INTERVAL_SECONDS
+
+    kind = str(args.kind).strip().lower()
+    if kind not in ("briefing", "tool"):
+        print(
+            f"jarvis schedule add: unknown kind {args.kind!r} (expected briefing | tool)",
+            file=sys.stderr,
+        )
+        return EXIT_INVALID
+    if args.every is None or args.every < MIN_INTERVAL_SECONDS:
+        print(
+            "jarvis schedule add: --every must be an integer "
+            f">= {MIN_INTERVAL_SECONDS} seconds",
+            file=sys.stderr,
+        )
+        return EXIT_INVALID
+    if kind == "briefing":
+        payload: dict = {"days": args.days}
+        if args.out:
+            payload["out"] = args.out
+    else:
+        if not str(args.tool or "").strip():
+            print(
+                "jarvis schedule add: tool schedules require --tool TOOL_ID",
+                file=sys.stderr,
+            )
+            return EXIT_INVALID
+        try:
+            parsed_args = json.loads(args.args or "{}")
+        except json.JSONDecodeError as exc:
+            print(f"jarvis schedule add: --args is not valid JSON: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+        if not isinstance(parsed_args, dict):
+            print("jarvis schedule add: --args must be a JSON object", file=sys.stderr)
+            return EXIT_INVALID
+        payload = {"tool_id": args.tool.strip(), "arguments": parsed_args}
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            data = runtime.scheduler.add(
+                name=args.name, kind=kind,
+                interval_seconds=args.every, payload=payload,
+            )
+        except SchedulerValidationError as exc:
+            print(f"jarvis schedule add: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+        except SchedulerUnavailableError as exc:
+            print(f"jarvis schedule add: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK
+    print(f"Scheduled {data['id']} ({data['kind']} every {data['interval_seconds']}s).")
+    return EXIT_OK
+
+
+def _cmd_schedule_list(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            items = runtime.scheduler.list()
+        except SchedulerUnavailableError as exc:
+            print(f"jarvis schedule list: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(items, indent=2))
+        return EXIT_OK
+    print("J.A.R.V.I.S. Schedules")
+    if not items:
+        print("  (none)")
+    for it in items:
+        state = "on " if it.get("enabled") else "off"
+        print(f"  {it.get('id','-'):<38} {state} {it.get('kind','-'):<10} every {it.get('interval_seconds',0)}s {it.get('name','')}")  # noqa: E501
+    return EXIT_OK
+
+
+def _cmd_schedule_remove(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            data = runtime.scheduler.remove(args.schedule_id)
+        except SchedulerValidationError as exc:
+            print(f"jarvis schedule remove: {exc}", file=sys.stderr)
+            return EXIT_INVALID
+        except SchedulerUnavailableError as exc:
+            print(f"jarvis schedule remove: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK
+    if data.get("removed"):
+        print(f"Removed schedule {args.schedule_id}.")
+        return EXIT_OK
+    print(f"jarvis schedule remove: unknown schedule: {args.schedule_id}", file=sys.stderr)
+    return EXIT_FAILURE
+
+
+def _cmd_schedule_tick(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            data = runtime.scheduler.tick()
+        except SchedulerUnavailableError as exc:
+            print(f"jarvis schedule tick: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK
+    print(f"Tick ran {data.get('ran_count', 0)} schedule(s).")
+    for run in data.get("ran", []):
+        mark = "ok" if run.get("ok") else "FAILED"
+        print(f"  {run.get('schedule_id','-'):<38} {mark} {run.get('name','')}")
+    return EXIT_OK
+
+
+def _cmd_schedule_health(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        data = runtime.scheduler.health()
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK if data.get("available", False) else EXIT_FAILURE
+    print("J.A.R.V.I.S. Scheduler Health")
+    print(f"  status    {data.get('status','unknown')}")
+    print(f"  available {data.get('available', False)}")
+    print(f"  enabled   {data.get('enabled','-')}")
+    print(f"  detail    {data.get('detail') or ''}")
+    return EXIT_OK if data.get("available", False) else EXIT_FAILURE
+
+
+# --- telegram --------------------------------------------------------------
+
+
+def _telegram_briefing_text(runtime: Runtime, include_content: bool) -> str:
+    try:
+        from jarvis.memory.models import MemoryType as _MemoryType
+
+        overall = runtime.overall_health().value
+        cutoff = datetime.now(UTC) - timedelta(days=1)
+        episodes = runtime.memory.retrieve(
+            memory_type=_MemoryType.EPISODIC, created_after=cutoff, limit=5
+        )
+        tasks = runtime.task.list(limit=50)
+        open_tasks = [t for t in tasks if t.get("state") in ("pending", "running", "paused")]
+        plans = runtime.planning.list()
+        open_plans = [p for p in plans if p.get("status") in ("draft", "ready", "running")]
+        lines = [
+            f"health: {overall}",
+            f"episodes (24h): {episodes.total}",
+            f"open tasks: {len(open_tasks)}",
+            f"open plans: {len(open_plans)}",
+        ]
+        if include_content:
+            for item in episodes.items:
+                content = item.memory.content
+                text = content if isinstance(content, str) else json.dumps(content)
+                lines.append(f"- {' '.join(text.split())[:160]}")
+        return "\n".join(lines)
+    except Exception as exc:
+        return f"briefing unavailable: {exc}"[:200]
+
+
+def _telegram_status_text(runtime: Runtime) -> str:
+    try:
+        return f"J.A.R.V.I.S. {runtime.overall_health().value}"
+    except Exception as exc:
+        return f"status unavailable: {exc}"[:200]
+
+
+def _telegram_screenshot_reply(runtime: Runtime, allow: bool) -> object:
+    """Capture the screen for Telegram. Pixels only with operator opt-in.
+
+    NOTE: Telegram commands bypass the interactive ASK gate by design
+    (nobody is at the keyboard), so screenshots require BOTH the chat
+    allowlist AND `listen --content` — the operator's explicit standing
+    approval for secret-dense pixels to leave the machine.
+    """
+    if not allow:
+        return "screenshots need listen --content (secret-dense pixels stay home otherwise)."
+    try:
+        import time as _time
+
+        from jarvis.tools.gui_tools import GuiScreenshotTool
+        from jarvis.tools.models import ToolContext
+
+        # Through the public tool (path policy enforced); the file copy stays
+        # on disk so the operator can audit exactly what left the machine.
+        stamp = _time.strftime("%Y%m%dT%H%M%S")
+        shot = runtime.config.tools.working_directory / "telegram" / f"shot-{stamp}.bmp"
+        try:
+            resolved = shot.resolve()
+        except OSError as exc:
+            return f"screenshot unavailable: {exc}"[:200]
+        from jarvis.tools.pathsecurity import is_within
+
+        roots = list(runtime.config.tools.allowed_roots)
+        if roots and not any(is_within(resolved, r) for r in roots):
+            return "screenshot refused: working directory outside allowed roots."
+        context = ToolContext(
+            working_directory=runtime.config.tools.working_directory,
+            environment={},
+            timeout_seconds=30.0,
+            max_output_bytes=8_388_608,
+        )
+        result = GuiScreenshotTool().execute({"out": str(shot)}, context)
+        if not result.success:
+            return f"screenshot unavailable: {result.error or 'unknown'}"[:200]
+        data = shot.read_bytes()
+        output = result.output or {}
+        caption = f"screen {output.get('width', '?')}x{output.get('height', '?')}"
+        return {"photo": data, "caption": caption}
+    except Exception as exc:
+        return f"screenshot unavailable: {exc}"[:200]
+
+
+def _cmd_telegram_health(args: argparse.Namespace) -> int:
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        data = runtime.telegram.health()
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK if data.get("available", False) else EXIT_FAILURE
+    print("J.A.R.V.I.S. Telegram Health")
+    print(f"  status    {data.get('status','unknown')}")
+    print(f"  available {data.get('available', False)}")
+    print(f"  enabled   {data.get('enabled','-')}")
+    print(f"  detail    {data.get('detail') or ''}")
+    return EXIT_OK if data.get("available", False) else EXIT_FAILURE
+
+
+def _cmd_telegram_listen(args: argparse.Namespace) -> int:
+    from jarvis.telegram.client import TelegramError
+
+    if args.for_seconds is None or args.for_seconds < 1:
+        print("jarvis telegram listen: --for must be >= 1 second", file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        runtime = _runtime_from_args(args)
+    except ConfigurationError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        try:
+            data = runtime.telegram.listen(
+                once=args.once,
+                for_seconds=args.for_seconds,
+                handlers={
+                    "briefing": lambda: _telegram_briefing_text(runtime, args.content),
+                    "status": lambda: _telegram_status_text(runtime),
+                    "screenshot": lambda: _telegram_screenshot_reply(runtime, args.content),
+                },
+            )
+        except TelegramError as exc:
+            print(f"jarvis telegram listen: {exc}", file=sys.stderr)
+            return EXIT_FAILURE
+    finally:
+        asyncio.run(runtime.stop())
+    if args.json:
+        print(json.dumps(data, indent=2))
+        return EXIT_OK
+    print(
+        f"Telegram listen done: {data.get('received', 0)} received, "
+        f"{data.get('replied', 0)} replied, {data.get('ignored', 0)} ignored, "
+        f"{data.get('errors', 0)} errors."
+    )
+    return EXIT_OK
+
+
 # --- hud -----------------------------------------------------------------
 
 
@@ -2232,8 +2630,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _cmd_memory_search(args)
         if args.memory_command == "digest":
             return _cmd_memory_digest(args)
+        if args.memory_command == "reindex":
+            return _cmd_memory_reindex(args)
         parser.error(
-            "memory requires a subcommand: health, list, get, delete, stats, search, digest"
+            "memory requires a subcommand: health, list, get, delete, stats, search, digest, reindex"  # noqa: E501
         )
     if args.command == "tools":
         if args.tools_command == "list":
@@ -2297,6 +2697,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.planning_command == "health":
             return _cmd_planning_health(args)
         parser.error("planning requires a subcommand: create, get, list, verify, approve, health")
+    if args.command == "schedule":
+        if args.schedule_command == "add":
+            return _cmd_schedule_add(args)
+        if args.schedule_command == "list":
+            return _cmd_schedule_list(args)
+        if args.schedule_command == "remove":
+            return _cmd_schedule_remove(args)
+        if args.schedule_command == "tick":
+            return _cmd_schedule_tick(args)
+        if args.schedule_command == "health":
+            return _cmd_schedule_health(args)
+        parser.error("schedule requires a subcommand: add, list, remove, tick, health")
+    if args.command == "telegram":
+        if args.telegram_command == "health":
+            return _cmd_telegram_health(args)
+        if args.telegram_command == "listen":
+            return _cmd_telegram_listen(args)
+        parser.error("telegram requires a subcommand: health, listen")
     if args.command == "hud":
         return _cmd_hud(args, compact=False)
     if args.command == "status":

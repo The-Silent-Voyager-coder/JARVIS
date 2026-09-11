@@ -33,9 +33,13 @@ def test_config_validate_valid(valid_config_yaml: Path, capsys: pytest.CaptureFi
 
 
 def test_config_validate_defaults(
-    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.delenv("JARVIS_CONFIG_PATH", raising=False)
+    monkeypatch.setattr(
+        "jarvis.configuration.loader.DEFAULT_CONFIG_PATH",
+        tmp_path / "absent.yaml",
+    )
     code = main(["config", "validate"])
     assert code == EXIT_OK
     assert "built-in defaults" in capsys.readouterr().out
@@ -462,6 +466,95 @@ def test_memory_digest_rejects_bad_days(
     code = main(["memory", "digest", "--days", "0", "--config", str(valid_config_yaml)])
     assert code == EXIT_INVALID
     assert "--days" in capsys.readouterr().err
+
+
+def _embedding_config(tmp_path: Path, *, enabled: bool) -> Path:
+    d = str(tmp_path).replace("\\", "/")
+    path = tmp_path / "emb-cli.yaml"
+    path.write_text(
+        f"""
+core:
+  name: "emb cli test"
+  data_dir: "{d}/data"
+  cache_dir: "{d}/cache"
+  logs_dir: "{d}/logs"
+  runtime_dir: "{d}/runtime"
+  workspaces_dir: "{d}/workspaces"
+  models_dir: "{d}/models"
+  backups_dir: "{d}/backups"
+  timezone: "UTC"
+logging:
+  level: "INFO"
+  retention_days: 1
+memory:
+  enabled: true
+  database_path: "{d}/data/memory.db"
+  auto_save_conversations: false
+  default_confidence: 0.8
+  retention_days: 365
+  embeddings_enabled: {"true" if enabled else "false"}
+  embedding_model: "fake"
+  embedding_base_url: "http://127.0.0.1:11434"
+tools:
+  working_directory: "{d}/workspace"
+  allowed_roots: ["{d}"]
+  denied_roots: []
+  terminal:
+    default_risk: "SYSTEM"
+  browser:
+    default_risk: "FORBIDDEN"
+scheduler:
+  enabled: false
+  max_schedules: 50
+  database_path: "{d}/data/scheduler.db"
+telegram:
+  enabled: false
+  token_env: "JARVIS_TEST_TELEGRAM_TOKEN"
+  allowed_chat_ids: []
+  poll_timeout_seconds: 1
+  max_listen_seconds: 60
+""",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_memory_search_semantic_needs_enabled(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    cfg = _embedding_config(tmp_path, enabled=False)
+    code = main(["memory", "search", "cat", "--semantic", "--config", str(cfg)])
+    assert code == EXIT_FAILURE
+    assert "embeddings_enabled" in capsys.readouterr().err
+    code = main(["memory", "reindex", "--config", str(cfg)])
+    assert code == EXIT_FAILURE
+    assert "embeddings_enabled" in capsys.readouterr().err
+
+
+def test_memory_search_semantic_and_reindex(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jarvis.configuration.loader import load_config
+    from jarvis.memory.service import MemoryService
+    from tests.unit.memory.test_memory_embeddings import _FakeProvider
+
+    cfg = _embedding_config(tmp_path, enabled=True)
+    monkeypatch.setattr("jarvis.memory.service.OllamaEmbeddingProvider", _FakeProvider)
+    service = MemoryService()
+    service.start(load_config(cfg).config)
+    try:
+        service.remember("the cat sat on the mat")
+        service.remember("dogs bark loudly at night")
+    finally:
+        service.shutdown()
+    code = main(["memory", "search", "my cat", "--semantic", "--content", "--config", str(cfg)])
+    assert code == EXIT_OK
+    out = capsys.readouterr().out
+    assert "semantic match: my cat" in out
+    assert "the cat sat on the mat" in out
+    code = main(["memory", "reindex", "--json", "--config", str(cfg)])
+    assert code == EXIT_OK
+    assert '"embedded": 0' in capsys.readouterr().out  # saves already embedded
 
 
 def test_briefing_empty(valid_config_yaml: Path, capsys: pytest.CaptureFixture[str]) -> None:

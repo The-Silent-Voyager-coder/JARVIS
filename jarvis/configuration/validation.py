@@ -26,11 +26,13 @@ from jarvis.configuration.model import (
     OpenCodeProviderConfig,
     PlanningConfig,
     RiskLevel,
+    SchedulerConfig,
     SecurityConfig,
     SecurityMode,
     SttConfig,
     TaskConfig,
     TasksConfig,
+    TelegramConfig,
     ToolDefaultsConfig,
     ToolsConfig,
     ToolSecurityMode,
@@ -45,7 +47,7 @@ PROVIDER_NAMES = frozenset({"local", "opencode"})
 
 Kind = Literal[
     "str", "nonempty_str", "path", "path_list", "positive_int", "nonneg_int",
-    "positive_number", "bool", "enum", "url", "mapping", "confidence",
+    "positive_number", "bool", "enum", "url", "mapping", "confidence", "int_list",
 ]
 
 
@@ -55,6 +57,7 @@ def _describe(kind: Kind) -> str:
         "nonempty_str": "non-empty string",
         "path": "absolute filesystem path",
         "path_list": "list of absolute filesystem paths",
+        "int_list": "list of integers",
         "positive_int": "integer greater than zero",
         "nonneg_int": "integer greater than or equal to zero",
         "positive_number": "number greater than zero",
@@ -128,6 +131,9 @@ SCHEMA: dict[str, dict[str, Field]] = {
         "auto_save_conversations": Field("bool", _describe("bool")),
         "default_confidence": Field("confidence", _describe("confidence")),
         "retention_days": Field("nonneg_int", _describe("nonneg_int")),
+        "embeddings_enabled": Field("bool", _describe("bool")),
+        "embedding_model": Field("nonempty_str", _describe("nonempty_str")),
+        "embedding_base_url": Field("url", _describe("url")),
     },
     "tasks": {
         "max_iterations": Field("positive_int", _describe("positive_int")),
@@ -179,6 +185,18 @@ SCHEMA: dict[str, dict[str, Field]] = {
         "per_step_timeout_seconds": Field("positive_number", _describe("positive_number")),
         "total_timeout_seconds": Field("positive_number", _describe("positive_number")),
         "database_path": Field("path", _describe("path")),
+    },
+    "scheduler": {
+        "enabled": Field("bool", _describe("bool")),
+        "max_schedules": Field("positive_int", _describe("positive_int")),
+        "database_path": Field("path", _describe("path")),
+    },
+    "telegram": {
+        "enabled": Field("bool", _describe("bool")),
+        "token_env": Field("nonempty_str", _describe("nonempty_str")),
+        "allowed_chat_ids": Field("int_list", _describe("int_list")),
+        "poll_timeout_seconds": Field("positive_number", _describe("positive_number")),
+        "max_listen_seconds": Field("positive_number", _describe("positive_number")),
     },
     "security": {
         "mode": Field(
@@ -241,7 +259,7 @@ PROVIDER_FIELDS: dict[str, dict[str, Field]] = {
 _SCALAR_KINDS: frozenset[Kind] = frozenset(
     {
         "str", "nonempty_str", "path", "positive_int", "nonneg_int",
-        "positive_number", "bool", "enum", "url", "confidence",
+        "positive_number", "bool", "enum", "url", "confidence", "int_list",
     }
 )
 
@@ -399,6 +417,8 @@ def validate(raw: dict[str, Any]) -> list[ConfigProblem]:
     _validate_workspace_ceilings(raw, errors)
     _validate_planning_ceilings(raw, errors)
     _validate_task_ceilings(raw, errors)
+    _validate_scheduler_ceilings(raw, errors)
+    _validate_telegram(raw, errors)
 
     return errors
 
@@ -539,6 +559,45 @@ def _validate_task_ceilings(raw: dict[str, Any], errors: list[ConfigProblem]) ->
             errors.append(ConfigProblem("task", name, value, str(exc)))
 
 
+def _validate_scheduler_ceilings(raw: dict[str, Any], errors: list[ConfigProblem]) -> None:
+    """Reject scheduler limits above ceilings (roadmap Phase C)."""
+    from jarvis.scheduler.limits import MAX_SCHEDULES_CEILING, check_bounded
+
+    scheduler = raw.get("scheduler")
+    if not isinstance(scheduler, dict):
+        return
+    value = scheduler.get("max_schedules")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return
+    try:
+        check_bounded("scheduler.max_schedules", value, MAX_SCHEDULES_CEILING)
+    except ValueError as exc:
+        errors.append(ConfigProblem("scheduler", "max_schedules", value, str(exc)))
+
+
+def _validate_telegram(raw: dict[str, Any], errors: list[ConfigProblem]) -> None:
+    """Enforce telegram listen/poll ceilings (types come from the schema)."""
+    from jarvis.telegram.limits import (
+        MAX_LISTEN_SECONDS_CEILING,
+        POLL_TIMEOUT_SECONDS_CEILING,
+    )
+
+    telegram = raw.get("telegram")
+    if not isinstance(telegram, dict):
+        return
+    for name, ceiling in (
+        ("poll_timeout_seconds", POLL_TIMEOUT_SECONDS_CEILING),
+        ("max_listen_seconds", MAX_LISTEN_SECONDS_CEILING),
+    ):
+        value = telegram.get(name)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue  # type errors are already reported by the schema pass
+        if value > ceiling:
+            errors.append(
+                ConfigProblem("telegram", name, value, f"at most {ceiling}")
+            )
+
+
 def _matches(kind: Kind, value: Any) -> bool:
     if kind == "str":
         return isinstance(value, str)
@@ -562,6 +621,10 @@ def _matches(kind: Kind, value: Any) -> bool:
         return isinstance(value, str) and bool(value.strip()) and Path(value).is_absolute()
     if kind == "path_list":
         return _matches_path_list(value)
+    if kind == "int_list":
+        return isinstance(value, list) and all(
+            isinstance(item, int) and not isinstance(item, bool) for item in value
+        )
     if kind == "url":
         if not isinstance(value, str):
             return False
@@ -723,6 +786,9 @@ def build_config(raw: dict[str, Any]) -> JarvisConfig:
         auto_save_conversations=bool(raw["memory"]["auto_save_conversations"]),
         default_confidence=float(raw["memory"]["default_confidence"]),
         retention_days=int(raw["memory"]["retention_days"]),
+        embeddings_enabled=bool(raw["memory"]["embeddings_enabled"]),
+        embedding_model=str(raw["memory"]["embedding_model"]),
+        embedding_base_url=str(raw["memory"]["embedding_base_url"]),
     )
 
     tasks = TasksConfig(
@@ -787,6 +853,20 @@ def build_config(raw: dict[str, Any]) -> JarvisConfig:
         database_path=p("task", "database_path"),
     )
 
+    scheduler = SchedulerConfig(
+        enabled=bool(raw["scheduler"]["enabled"]),
+        max_schedules=int(raw["scheduler"]["max_schedules"]),
+        database_path=p("scheduler", "database_path"),
+    )
+
+    telegram = TelegramConfig(
+        enabled=bool(raw["telegram"]["enabled"]),
+        token_env=str(raw["telegram"]["token_env"]),
+        allowed_chat_ids=tuple(int(c) for c in raw["telegram"]["allowed_chat_ids"]),
+        poll_timeout_seconds=float(raw["telegram"]["poll_timeout_seconds"]),
+        max_listen_seconds=float(raw["telegram"]["max_listen_seconds"]),
+    )
+
     security = SecurityConfig(
         default_mode=SecurityMode(str(raw["security"]["default_mode"])),
         mode=ToolSecurityMode(str(raw["security"]["mode"])),
@@ -824,6 +904,8 @@ def build_config(raw: dict[str, Any]) -> JarvisConfig:
         workspace=workspace,
         planning=planning,
         task=task,
+        scheduler=scheduler,
+        telegram=telegram,
         security=security,
         voice=voice,
     )

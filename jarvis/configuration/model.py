@@ -107,6 +107,9 @@ class MemoryConfig:
     auto_save_conversations: bool
     default_confidence: float
     retention_days: int
+    embeddings_enabled: bool
+    embedding_model: str
+    embedding_base_url: str
 
 
 @dataclass(frozen=True)
@@ -145,6 +148,26 @@ class TaskConfig:
     per_step_timeout_seconds: float
     total_timeout_seconds: float
     database_path: Path
+
+
+@dataclass(frozen=True)
+class SchedulerConfig:
+    """Scheduler settings (roadmap Phase C bounded ticks)."""
+
+    enabled: bool
+    max_schedules: int
+    database_path: Path
+
+
+@dataclass(frozen=True)
+class TelegramConfig:
+    """Telegram bridge settings (remote chat, laptop stays home)."""
+
+    enabled: bool
+    token_env: str
+    allowed_chat_ids: tuple[int, ...]
+    poll_timeout_seconds: float
+    max_listen_seconds: float
 
 
 @dataclass(frozen=True)
@@ -250,5 +273,7 @@ class JarvisConfig:
     workspace: WorkspaceConfig
     planning: PlanningConfig
     task: TaskConfig
+    scheduler: SchedulerConfig
+    telegram: TelegramConfig
     security: SecurityConfig
     voice: VoiceConfig
