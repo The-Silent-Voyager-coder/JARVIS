@@ -63,7 +63,6 @@ def test_config_validate_missing_file(tmp_path: Path, capsys: pytest.CaptureFixt
 
 def test_health_command(valid_config_yaml: Path, capsys: pytest.CaptureFixture[str]) -> None:
     code = main(["health", "--config", str(valid_config_yaml)])
-    assert code == EXIT_OK
     out = capsys.readouterr().out
     assert "J.A.R.V.I.S. Health" in out
     assert "Core" in out and "HEALTHY" in out
@@ -72,6 +71,11 @@ def test_health_command(valid_config_yaml: Path, capsys: pytest.CaptureFixture[s
     assert "Service Registry" in out
     assert "Storage" in out
     assert "Overall" in out
+    # Provider-dependent: without a live Ollama the intelligence check (and
+    # therefore Overall) is UNHEALTHY — the exit code must match the report,
+    # not assume a provider is running (CI runners have none).
+    expected = EXIT_OK if "Overall          HEALTHY" in out else EXIT_FAILURE
+    assert code == expected
 
 
 def test_health_with_invalid_config(
