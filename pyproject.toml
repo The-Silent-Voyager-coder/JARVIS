@@ -19,7 +19,7 @@ classifiers = [
 # PyYAML is required for the documented YAML configuration format.
 # Every future addition requires written justification (§5 table).
 dependencies = [
-    "PyYAML>=6.0",
+    "PyYAML>=6.0.3",
     # Roadmap Phase A (real local voice): Vosk offline STT + Piper neural TTS.
     # Both run fully offline on Windows with model files under C:/JARVIS/models.
     "vosk>=0.3.45",
