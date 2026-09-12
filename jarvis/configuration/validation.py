@@ -252,6 +252,7 @@ PROVIDER_FIELDS: dict[str, dict[str, Field]] = {
         "enabled": Field("bool", _describe("bool")),
         "base_url": Field("url", _describe("url")),
         "api_key_env": Field("str", _describe("str")),
+        "model": Field("str", _describe("str")),
         "timeout_seconds": Field("positive_number", _describe("positive_number")),
     },
 }
@@ -776,6 +777,7 @@ def build_config(raw: dict[str, Any]) -> JarvisConfig:
             enabled=bool(opencode_data["enabled"]),
             base_url=str(opencode_data["base_url"]),
             api_key_env=str(opencode_data["api_key_env"]),
+            model=str(opencode_data.get("model", "")),
             timeout_seconds=float(opencode_data["timeout_seconds"]),
         ),
     )

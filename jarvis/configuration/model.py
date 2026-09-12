@@ -86,6 +86,7 @@ class OpenCodeProviderConfig:
     enabled: bool
     base_url: str
     api_key_env: str
+    model: str
     timeout_seconds: float
 
 

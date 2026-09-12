@@ -1,9 +1,11 @@
 """OpenCode adapter tests against an in-process fake HTTP server.
 
-Covers /global/health, /doc spec fetch, session creation, prompt, response
-handling, malformed/timeout/server-error paths, abort, capabilities, and the
-delegation surface (sessions, SSE events, permissions). No real OpenCode
-server, no internet.
+Covers /global/health (both `ok` and `healthy` shapes), /doc spec fetch,
+session creation, sync message prompt (`POST /session/:id/message` with
+`model{providerID,modelID}` + `variant`), response parsing, malformed /
+timeout / server-error paths, abort, capabilities, and the delegation
+surface (sessions, SSE events, permissions). No real OpenCode server,
+no internet.
 """
 
 from __future__ import annotations
@@ -21,11 +23,13 @@ from jarvis.intelligence.provider import Capability, ProviderState
 OPENCODE_HEALTH = {"ok": True, "service": "opencode", "version": "0.1.0"}
 OPENCODE_SPEC = {"openapi": "3.1.0", "info": {"title": "opencode server"}}
 SESSION_ID = "sess-123"
-PROMPT_RESPONSE = {
-    "id": "resp-1",
-    "content": "code answer",
-    "model": "opencode-model",
-    "finish_reason": "stop",
+MESSAGE_RESPONSE = {
+    "info": {"modelID": "opencode-model", "stopReason": "stop"},
+    "parts": [
+        {"type": "step-start"},
+        {"type": "text", "text": "code answer"},
+        {"type": "step-finish"},
+    ],
     "usage": {"prompt_tokens": 11, "completion_tokens": 3, "total_tokens": 14},
 }
 
@@ -76,10 +80,19 @@ def test_health_negative_ok_field(fake_server) -> None:
     assert health.state is ProviderState.DEGRADED
 
 
+def test_health_healthy_shape(fake_server) -> None:
+    # Live servers (1.18+) answer {"healthy": true, ...} instead of {"ok": ...}.
+    fake_server.route("GET", "/global/health", 200, {"healthy": True, "version": "1.18.30"})
+    provider = OpenCodeProvider(base_url=fake_server.url)
+    health = provider.health()
+    assert health.ok
+    assert health.state is ProviderState.READY
+
+
 def test_generate_sessions_and_prompt(opencode: OpenCodeProvider, fake_server) -> None:
     fake_server.route("POST", "/session", 200, {"id": SESSION_ID})
     fake_server.route(
-        "POST", f"/session/{SESSION_ID}/prompt", 200, PROMPT_RESPONSE
+        "POST", f"/session/{SESSION_ID}/message", 200, MESSAGE_RESPONSE
     )
     fake_server.route("DELETE", f"/session/{SESSION_ID}", 200, {"ok": True})
     opencode.init()
@@ -94,16 +107,17 @@ def test_generate_sessions_and_prompt(opencode: OpenCodeProvider, fake_server) -
     assert "POST" in methods
     assert "DELETE" in methods
     prompt_request = next(
-        r for r in fake_server.requests if "prompt" in r["path"]
+        r for r in fake_server.requests if r["path"].endswith("/message")
     )
-    assert '"role": "user"' in prompt_request["body"]
-    assert "prompt_async" in prompt_request["body"]
+    assert '"type": "text"' in prompt_request["body"]
+    assert "write code" in prompt_request["body"]
+    assert '"model"' not in prompt_request["body"]  # server default when unset
 
 
 def test_generate_system_prompt(opencode: OpenCodeProvider, fake_server) -> None:
     fake_server.route("POST", "/session", 200, {"id": SESSION_ID})
     fake_server.route(
-        "POST", f"/session/{SESSION_ID}/prompt", 200, PROMPT_RESPONSE
+        "POST", f"/session/{SESSION_ID}/message", 200, MESSAGE_RESPONSE
     )
     fake_server.route("DELETE", f"/session/{SESSION_ID}", 200, {"ok": True})
     opencode.init()
@@ -111,27 +125,84 @@ def test_generate_system_prompt(opencode: OpenCodeProvider, fake_server) -> None
         AIRequest(
             messages=[Message.user("hi")],
             system_prompt="you are a code assistant",
-            model="claude-sonnet",
+            model="opencode/muse-spark-1.3-contributor-free#xhigh",
         )
     )
-    prompt_request = next(r for r in fake_server.requests if "prompt" in r["path"])
-    assert '"system"' in prompt_request["body"]
-    assert '"model": "claude-sonnet"' in prompt_request["body"]
+    prompt_request = next(r for r in fake_server.requests if r["path"].endswith("/message"))
+    assert '"system": "you are a code assistant"' in prompt_request["body"]
+    assert '"providerID": "opencode"' in prompt_request["body"]
+    assert '"modelID": "muse-spark-1.3-contributor-free"' in prompt_request["body"]
+    assert '"variant": "xhigh"' in prompt_request["body"]
 
 
 def test_generate_usage_absent_is_none(opencode: OpenCodeProvider, fake_server) -> None:
     fake_server.route("POST", "/session", 200, {"id": SESSION_ID})
     fake_server.route(
         "POST",
-        f"/session/{SESSION_ID}/prompt",
+        f"/session/{SESSION_ID}/message",
         200,
-        {"content": "no usage here", "finish_reason": "stop"},
+        {"info": {}, "parts": [{"type": "text", "text": "no usage here"}]},
     )
     fake_server.route("DELETE", f"/session/{SESSION_ID}", 200, {"ok": True})
     opencode.init()
     response = opencode.generate(AIRequest(messages=[Message.user("hi")]))
     assert response.usage is None
     assert response.content == "no usage here"
+
+
+def test_generate_ignores_non_text_parts(opencode: OpenCodeProvider, fake_server) -> None:
+    fake_server.route("POST", "/session", 200, {"id": SESSION_ID})
+    fake_server.route(
+        "POST",
+        f"/session/{SESSION_ID}/message",
+        200,
+        {
+            "info": {"modelID": "m"},
+            "parts": [
+                {"type": "step-start"},
+                {"type": "reasoning", "text": ""},
+                {"type": "text", "text": "final"},
+                {"type": "step-finish"},
+            ],
+        },
+    )
+    fake_server.route("DELETE", f"/session/{SESSION_ID}", 200, {"ok": True})
+    opencode.init()
+    response = opencode.generate(AIRequest(messages=[Message.user("hi")]))
+    assert response.content == "final"
+
+
+def test_default_model_fallback(fake_server) -> None:
+    fake_server.route("GET", "/global/health", 200, OPENCODE_HEALTH)
+    fake_server.route("GET", "/doc", 200, OPENCODE_SPEC)
+    fake_server.route("POST", "/session", 200, {"id": SESSION_ID})
+    fake_server.route(
+        "POST",
+        f"/session/{SESSION_ID}/message",
+        200,
+        {"info": {"modelID": "m"}, "parts": [{"type": "text", "text": "hi"}]},
+    )
+    fake_server.route("DELETE", f"/session/{SESSION_ID}", 200, {"ok": True})
+    provider = OpenCodeProvider(
+        base_url=fake_server.url,
+        model="opencode/muse-spark-1.3-contributor-free#medium",
+    )
+    provider.init()
+    response = provider.generate(AIRequest(messages=[Message.user("hi")]))
+    assert response.model == "opencode/muse-spark-1.3-contributor-free#medium"
+    prompt_request = next(r for r in fake_server.requests if r["path"].endswith("/message"))
+    assert '"modelID": "muse-spark-1.3-contributor-free"' in prompt_request["body"]
+    assert '"variant": "medium"' in prompt_request["body"]
+
+
+def test_split_model_shapes() -> None:
+    from jarvis.intelligence.opencode import OpenCodeProvider as P
+
+    assert P._split_model(None) == (None, None)
+    assert P._split_model("") == (None, None)
+    assert P._split_model("opencode/m#xhigh") == ({"providerID": "opencode", "modelID": "m"}, "xhigh")
+    assert P._split_model("opencode/m") == ({"providerID": "opencode", "modelID": "m"}, None)
+    assert P._split_model("m") == ({"providerID": "opencode", "modelID": "m"}, None)
 
 
 def test_generate_session_creation_failure(opencode: OpenCodeProvider, fake_server) -> None:
@@ -157,7 +228,7 @@ def test_generate_unreachable(fake_server) -> None:
 
 def test_generate_server_error(opencode: OpenCodeProvider, fake_server) -> None:
     fake_server.route("POST", "/session", 200, {"id": SESSION_ID})
-    fake_server.route("POST", f"/session/{SESSION_ID}/prompt", 500, {"error": "x"})
+    fake_server.route("POST", f"/session/{SESSION_ID}/message", 500, {"error": "x"})
     fake_server.route("DELETE", f"/session/{SESSION_ID}", 200, {"ok": True})
     opencode.init()
     with pytest.raises(ProviderError, match="HTTP 500"):
@@ -166,7 +237,7 @@ def test_generate_server_error(opencode: OpenCodeProvider, fake_server) -> None:
 
 def test_tools_unsupported_explicit_error(opencode: OpenCodeProvider, fake_server) -> None:
     fake_server.route("POST", "/session", 200, {"id": SESSION_ID})
-    fake_server.route("POST", f"/session/{SESSION_ID}/prompt", 200, PROMPT_RESPONSE)
+    fake_server.route("POST", f"/session/{SESSION_ID}/message", 200, MESSAGE_RESPONSE)
     fake_server.route("DELETE", f"/session/{SESSION_ID}", 200, {"ok": True})
     opencode.init()
     request = AIRequest(
@@ -228,27 +299,28 @@ def test_create_session(opencode: OpenCodeProvider, fake_server) -> None:
 
 
 def test_send_delegation_prompt_ok(opencode: OpenCodeProvider, fake_server) -> None:
-    fake_server.route("POST", "/session/sess-1/prompt", 200, {"ok": True})
+    fake_server.route("POST", "/session/sess-1/prompt_async", 204, "")
     opencode.init()
     opencode.send_delegation_prompt("sess-1", "do the work", "/tmp/project")
-    prompt_request = next(r for r in fake_server.requests if "prompt" in r["path"])
-    assert '"prompt_async": true' in prompt_request["body"]
-    assert '"content": "do the work"' in prompt_request["body"]
-    assert '"working_directory": "/tmp/project"' in prompt_request["body"]
+    prompt_request = next(r for r in fake_server.requests if "prompt_async" in r["path"])
+    assert '"type": "text"' in prompt_request["body"]
+    assert '"text": "do the work"' in prompt_request["body"]
 
 
 def test_send_delegation_prompt_omits_cwd_when_absent(
     opencode: OpenCodeProvider, fake_server
 ) -> None:
-    fake_server.route("POST", "/session/sess-1/prompt", 200, {"ok": True})
+    # The 1.18 message API carries no directory field: scoping stays a
+    # JARVIS-side permission decision, never a wire field.
+    fake_server.route("POST", "/session/sess-1/prompt_async", 204, "")
     opencode.init()
     opencode.send_delegation_prompt("sess-1", "hello")
-    prompt_request = next(r for r in fake_server.requests if "prompt" in r["path"])
+    prompt_request = next(r for r in fake_server.requests if "prompt_async" in r["path"])
     assert "working_directory" not in prompt_request["body"]
 
 
 def test_send_delegation_prompt_failure(opencode: OpenCodeProvider, fake_server) -> None:
-    fake_server.route("POST", "/session/sess-1/prompt", 500, {"error": "boom"})
+    fake_server.route("POST", "/session/sess-1/prompt_async", 500, {"error": "boom"})
     opencode.init()
     with pytest.raises(ProviderError, match="prompt"):
         opencode.send_delegation_prompt("sess-1", "do it")

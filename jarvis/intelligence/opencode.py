@@ -1,10 +1,17 @@
 """OpenCode provider adapter (remote code execution).
 
-Phase 2 scope: provider connection only — connectivity/health via
-`/global/health`, session lifecycle via `/session/*`, generation via
-`prompt_async`/`/session/:id/prompt`, streaming via `/event` SSE, abort via
-`/session/:id/abort`. No authority delegation, no agent loop — the provider
-merely routes model calls to an OpenCode server.
+Connectivity/health via `/global/health`, session lifecycle via
+`/session/*`, sync generation via `POST /session/:id/message`
+(`{parts, model{providerID,modelID}, variant, system}` → `{info, parts}`),
+async delegation via `POST /session/:id/prompt_async` (204) + `/event`
+SSE, abort via `/session/:id/abort`. No authority delegation, no agent
+loop — the provider merely routes model calls to an OpenCode server.
+
+Model selectors look like `provider/model#variant`
+(e.g. `opencode/muse-spark-1.3-contributor-free#xhigh`); a bare model id
+resolves to the `opencode` provider namespace. Variants are server-side
+effort presets — unknown variants produce a server error, never a
+silent downgrade.
 
 The OpenCode server surface is interrogated at init time through `/doc`
 (OpenAPI 3.1); if the spec cannot be fetched, the adapter reports DEGRADED
@@ -56,14 +63,16 @@ class OpenCodeProvider(AIProvider):
         *,
         base_url: str = OPENCODE_DEFAULT_URL,
         api_key_env: str = "",
+        model: str = "",
         timeout_seconds: float = 60.0,
         provider_id: str = "opencode",
     ) -> None:
         super().__init__(provider_id)
         self._base_url = base_url if base_url else OPENCODE_DEFAULT_URL
-        self._timeout = timeout_seconds if timeout_seconds > 0 else 60.0
         self._api_key: str | None = None
         self._api_key_env = api_key_env
+        self._default_model = model.strip()
+        self._timeout = timeout_seconds if timeout_seconds > 0 else 60.0
         self._spec_fetched = False
 
     # --- public surface ------------------------------------------------
@@ -112,7 +121,7 @@ class OpenCodeProvider(AIProvider):
                 state=ProviderState.DEGRADED,
                 detail="non-object /global/health response",
             )
-        ok = bool(data.get("ok", data.get("status") == "ok"))
+        ok = bool(data.get("ok", data.get("healthy", data.get("status") == "ok")))
         state = ProviderState.READY if ok else ProviderState.DEGRADED
         return ProviderHealth(
             provider_id=self._provider_id,
@@ -129,9 +138,9 @@ class OpenCodeProvider(AIProvider):
         session_id = self._create_session()
         try:
             data = transport.request_json(
-                f"{self._base_url.rstrip('/')}/session/{urllib.parse.quote(session_id)}/prompt",
+                f"{self._base_url.rstrip('/')}/session/{urllib.parse.quote(session_id)}/message",
                 method="POST",
-                body=self._prompt_body(request),
+                body=self._message_body(request),
                 timeout=request.timeout or self._timeout,
                 default_timeout=self._timeout,
                 headers=self._auth_headers(),
@@ -145,7 +154,7 @@ class OpenCodeProvider(AIProvider):
         finally:
             self._cleanup_session(session_id)
         if not isinstance(data, dict):
-            raise ProviderError("opencode returned a non-object prompt response")
+            raise ProviderError("opencode returned a non-object message response")
         elapsed = (datetime.now(UTC) - started).total_seconds() * 1000.0
         log.info(
             "opencode generate completed",
@@ -156,26 +165,51 @@ class OpenCodeProvider(AIProvider):
                 "session_id": session_id,
             },
         )
-        content = data.get("content") or data.get("text") or data.get("response")
-        usage = self._parse_usage(data)
+        parts = data.get("parts")
+        part_list = parts if isinstance(parts, list) else []
+        texts = [
+            str(part.get("text"))
+            for part in part_list
+            if isinstance(part, dict)
+            and part.get("type") == "text"
+            and isinstance(part.get("text"), str)
+            and part.get("text").strip()
+        ]
+        content = "\n".join(texts) if texts else None
+        info = data.get("info") if isinstance(data.get("info"), dict) else {}
+        usage = self._parse_usage(data) or self._parse_usage(info)
         tool_calls = None
-        raw_calls = data.get("tool_calls") or []
+        raw_calls = [
+            part for part in part_list
+            if isinstance(part, dict) and part.get("type") in ("tool", "tool_call", "function_call")
+        ]
         if raw_calls:
             tool_calls = [
                 ToolCall(
-                    id=str(call.get("id") or f"call_{index}"),
-                    name=str(call.get("name") or call.get("function", {}).get("name", "unknown")),
-                    arguments=dict(call.get("args") or call.get("arguments") or {}),
+                    id=str(call.get("id") or call.get("callID") or f"call_{index}"),
+                    name=str(
+                        call.get("name") or call.get("tool")
+                        or (call.get("function", {}).get("name") if isinstance(call.get("function"), dict) else None)
+                        or "unknown"
+                    ),
+                    arguments=dict(call.get("args") or call.get("arguments") or call.get("input") or {}),
                 )
                 for index, call in enumerate(raw_calls)
-                if isinstance(call, dict)
             ]
+        model_echo = (
+            request.model
+            or self._default_model
+            or (str(info.get("modelID")) if info.get("modelID") else None)
+            or "opencode"
+        )
         return AIResponse(
             request_id=request.request_id,
             provider=self._provider_id,
-            model=str(data.get("model") or "opencode"),
+            model=model_echo,
             content=str(content) if content is not None else None,
-            finish_reason=_map_finish_reason(data.get("finish_reason")),
+            finish_reason=_map_finish_reason(
+                data.get("finish_reason") or info.get("stopReason") or (tool_calls and "tool")
+            ),
             usage=usage,
             tool_calls=tool_calls,
         )
@@ -202,20 +236,15 @@ class OpenCodeProvider(AIProvider):
         """Send the delegation prompt for asynchronous execution.
 
         `working_directory` has already passed JARVIS path security in the
-        DelegationManager; it is passed along so the executor scopes its
-        work to that directory. The executor never receives an arbitrary
-        process CWD from anywhere else.
+        DelegationManager. The 1.18 message API carries no directory field,
+        so scoping stays a JARVIS-side permission decision (every executor
+        file/shell action is allow/ask/deny gated); it is not forwarded.
         """
-        body: dict[str, Any] = {
-            "messages": [{"role": "user", "content": prompt}],
-            "prompt_async": True,
-        }
-        if working_directory:
-            body["working_directory"] = working_directory
+        body: dict[str, Any] = {"parts": [{"type": "text", "text": prompt}]}
         try:
             transport.request_json(
                 f"{self._base_url.rstrip('/')}/session/"
-                f"{urllib.parse.quote(session_id)}/prompt",
+                f"{urllib.parse.quote(session_id)}/prompt_async",
                 method="POST",
                 body=body,
                 timeout=min(self._timeout, 10.0),
@@ -480,23 +509,49 @@ class OpenCodeProvider(AIProvider):
         except Exception as exc:  # cleanup is best-effort
             log.debug("opencode session cleanup failed: %s", exc)
 
-    def _prompt_body(self, request: AIRequest) -> dict[str, Any]:
-        messages = []
+    @staticmethod
+    def _split_model(model: str | None) -> tuple[dict[str, str] | None, str | None]:
+        """Split `provider/model#variant` into ({providerID, modelID}, variant).
+
+        A bare model id resolves to the `opencode` provider namespace; an
+        empty model means "server default" (no model key is sent).
+        """
+        if not model or not model.strip():
+            return None, None
+        rest, _, variant = model.strip().partition("#")
+        if "/" in rest:
+            provider, _, model_id = rest.partition("/")
+        else:
+            provider, model_id = "opencode", rest
+        if not model_id.strip():
+            return None, variant.strip() or None
+        return (
+            {"providerID": provider.strip(), "modelID": model_id.strip()},
+            variant.strip() or None,
+        )
+
+    def _message_body(self, request: AIRequest) -> dict[str, Any]:
+        utterances = [
+            (message.role.value, self._render_content(message))
+            for message in request.messages
+            if message.role.value != "system"
+        ]
+        if len(utterances) == 1 and not request.system_prompt:
+            text = utterances[0][1]
+        else:
+            lines = []
+            if request.system_prompt:
+                lines.append(f"system: {request.system_prompt}")
+            lines.extend(f"{role}: {content}" for role, content in utterances)
+            text = "\n".join(lines)
+        body: dict[str, Any] = {"parts": [{"type": "text", "text": text}]}
         if request.system_prompt:
-            messages.append({"role": "system", "content": request.system_prompt})
-        for message in request.messages:
-            messages.append(
-                {
-                    "role": message.role.value,
-                    "content": self._render_content(message),
-                }
-            )
-        body: dict[str, Any] = {
-            "messages": messages,
-            "prompt_async": True,
-        }
-        if request.model:
-            body["model"] = request.model
+            body["system"] = request.system_prompt
+        model, variant = self._split_model(request.model or self._default_model or None)
+        if model:
+            body["model"] = model
+        if variant:
+            body["variant"] = variant
         return body
 
     def _render_content(self, message: Any) -> str:

@@ -58,6 +58,7 @@ ai:
       enabled: false
       base_url: "http://127.0.0.1:4096"
       api_key_env: ""
+      model: ""
       timeout_seconds: 5.0
 agent:
   enabled: true

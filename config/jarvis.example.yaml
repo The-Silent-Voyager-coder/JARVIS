@@ -38,6 +38,11 @@ ai:
       enabled: false
       base_url: "http://127.0.0.1:4096"
       api_key_env: "OPENCODE_API_KEY"
+      # Default model for direct calls, "provider/model#variant" shape.
+      # "" = server default. Variants are server-side effort presets
+      # (none/minimal/low/medium/high/xhigh where the model offers them).
+      # Example: "opencode/muse-spark-1.3-contributor-free#medium"
+      model: ""
       timeout_seconds: 300
 
 memory:

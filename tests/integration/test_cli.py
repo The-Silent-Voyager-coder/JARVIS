@@ -166,6 +166,7 @@ ai:
       enabled: false
       base_url: "http://127.0.0.1:4096"
       api_key_env: ""
+      model: ""
       timeout_seconds: 1
 """,
         encoding="utf-8",
@@ -211,6 +212,7 @@ ai:
       enabled: true
       base_url: "http://127.0.0.1:1"
       api_key_env: ""
+      model: ""
       timeout_seconds: 1
 """,
         encoding="utf-8",
