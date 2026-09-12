@@ -13,7 +13,7 @@ def test_schedule_health(valid_config_yaml: Path, capsys: pytest.CaptureFixture[
     code = main(["schedule", "health", "--config", str(valid_config_yaml)])
     assert code == EXIT_OK
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Scheduler Health" in out
+    assert "Great Sage Scheduler Health" in out
     assert "healthy" in out
 
 

@@ -76,7 +76,7 @@ class NetworkFetchTool(BaseTool):
         max_bytes = max(1, min(max_bytes, _ABSOLUTE_MAX_BYTES))
         timeout = max(1.0, min(context.timeout_seconds, 60.0))
         request = urllib.request.Request(
-            url, headers={"User-Agent": "JARVIS-local/1.0"}, method="GET"
+            url, headers={"User-Agent": "GreatSage-local/1.0"}, method="GET"
         )
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:

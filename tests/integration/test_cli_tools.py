@@ -60,7 +60,7 @@ def test_tools_list(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     code = main(["tools", "list", "--config", str(config)])
     assert code == EXIT_OK
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Tools" in out
+    assert "Great Sage Tools" in out
     assert "filesystem.list" in out
     assert "shell.execute" in out
     assert "filesystem.delete" not in out
@@ -98,7 +98,7 @@ def test_tools_health(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> Non
     code = main(["tools", "health", "--config", str(config)])
     assert code == EXIT_OK
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Tool Health" in out
+    assert "Great Sage Tool Health" in out
     assert "status    healthy" in out
     assert "mode      normal" in out
     assert "tools     15" in out

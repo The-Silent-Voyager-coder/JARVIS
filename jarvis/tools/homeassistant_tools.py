@@ -67,7 +67,7 @@ def _api(
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
-        "User-Agent": "JARVIS-local/1.0",
+        "User-Agent": "GreatSage-local/1.0",
     }
     if payload is not None:
         try:

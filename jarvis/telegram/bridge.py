@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 
 HELP_TEXT = (
-    "J.A.R.V.I.S. remote — commands:\n"
+    "Great Sage, the Wise One, acknowledges you. Commands:\n"
     "/briefing — health + recent episodes + open tasks/plans\n"
     "/status — overall health in one line\n"
     "/screenshot — current laptop screen (needs --content on listen)\n"

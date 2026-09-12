@@ -124,7 +124,7 @@ def test_wake_detection_event(tmp_path: Path) -> None:
     service = make_service(tmp_path)
     sink = EventSink()
     service.publisher = sink
-    assert service.detect_wake("hey jarvis, lights on").detected
+    assert service.detect_wake("hey great sage, lights on").detected
     assert VOICE_WAKE_DETECTED in sink.types
     assert not service.detect_wake("good morning").detected
 

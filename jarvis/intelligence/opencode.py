@@ -166,17 +166,19 @@ class OpenCodeProvider(AIProvider):
             },
         )
         parts = data.get("parts")
-        part_list = parts if isinstance(parts, list) else []
-        texts = [
-            str(part.get("text"))
-            for part in part_list
-            if isinstance(part, dict)
-            and part.get("type") == "text"
-            and isinstance(part.get("text"), str)
-            and part.get("text").strip()
-        ]
+        part_list: list[Any] = parts if isinstance(parts, list) else []
+        texts: list[str] = []
+        for part in part_list:
+            if not isinstance(part, dict):
+                continue
+            if part.get("type") != "text":
+                continue
+            text = part.get("text")
+            if isinstance(text, str) and text.strip():
+                texts.append(text)
         content = "\n".join(texts) if texts else None
-        info = data.get("info") if isinstance(data.get("info"), dict) else {}
+        raw_info: Any = data.get("info")
+        info: dict[str, Any] = raw_info if isinstance(raw_info, dict) else {}
         usage = self._parse_usage(data) or self._parse_usage(info)
         tool_calls = None
         raw_calls = [
@@ -187,12 +189,10 @@ class OpenCodeProvider(AIProvider):
             tool_calls = [
                 ToolCall(
                     id=str(call.get("id") or call.get("callID") or f"call_{index}"),
-                    name=str(
-                        call.get("name") or call.get("tool")
-                        or (call.get("function", {}).get("name") if isinstance(call.get("function"), dict) else None)
-                        or "unknown"
+                    name=_tool_call_name(call),
+                    arguments=dict(
+                        call.get("args") or call.get("arguments") or call.get("input") or {}
                     ),
-                    arguments=dict(call.get("args") or call.get("arguments") or call.get("input") or {}),
                 )
                 for index, call in enumerate(raw_calls)
             ]
@@ -592,6 +592,13 @@ class OpenCodeProvider(AIProvider):
 
     def _on_shutdown(self) -> None:
         self._spec_fetched = False
+
+
+def _tool_call_name(call: dict[str, Any]) -> str:
+    """Best-effort tool name across part shapes (unknown -> "unknown")."""
+    nested = call.get("function")
+    nested_name = nested.get("name") if isinstance(nested, dict) else None
+    return str(call.get("name") or call.get("tool") or nested_name or "unknown")
 
 
 def _map_finish_reason(reason: Any) -> FinishReason:

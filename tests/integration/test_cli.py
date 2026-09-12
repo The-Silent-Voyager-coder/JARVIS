@@ -14,7 +14,7 @@ def test_help_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
         main(["--help"])
     assert exc.value.code == 0
     out = capsys.readouterr().out
-    assert "usage: jarvis" in out
+    assert "usage: greatsage" in out
 
 
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:
@@ -64,7 +64,7 @@ def test_config_validate_missing_file(tmp_path: Path, capsys: pytest.CaptureFixt
 def test_health_command(valid_config_yaml: Path, capsys: pytest.CaptureFixture[str]) -> None:
     code = main(["health", "--config", str(valid_config_yaml)])
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Health" in out
+    assert "Great Sage Health" in out
     assert "Core" in out and "HEALTHY" in out
     assert "Configuration" in out
     assert "Event Bus" in out
@@ -107,7 +107,7 @@ def test_health_unhealthy_storage_returns_failure(
 def test_no_command_prints_help(capsys: pytest.CaptureFixture[str]) -> None:
     code = main([])
     assert code == EXIT_OK
-    assert "usage: jarvis" in capsys.readouterr().out
+    assert "usage: greatsage" in capsys.readouterr().out
 
 
 def test_unknown_subcommand_errors() -> None:
@@ -257,7 +257,7 @@ def test_memory_health_command(valid_config_yaml: Path, capsys: pytest.CaptureFi
     code = main(["memory", "health", "--config", str(valid_config_yaml)])
     assert code == EXIT_OK
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Memory Health" in out
+    assert "Great Sage Memory Health" in out
     assert "status" in out
     assert "healthy" in out
     assert "memory.db" in out
@@ -283,7 +283,7 @@ def test_memory_stats_empty(valid_config_yaml: Path, capsys: pytest.CaptureFixtu
     code = main(["memory", "stats", "--config", str(valid_config_yaml)])
     assert code == EXIT_OK
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Memory Stats" in out
+    assert "Great Sage Memory Stats" in out
     assert "total" in out
     assert "long_term" in out
 
@@ -410,7 +410,7 @@ def test_memory_digest_empty(valid_config_yaml: Path, capsys: pytest.CaptureFixt
     code = main(["memory", "digest", "--config", str(valid_config_yaml)])
     assert code == EXIT_OK
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Memory Digest" in out
+    assert "Great Sage Memory Digest" in out
     assert "(none)" in out
 
 
@@ -421,7 +421,7 @@ def test_memory_digest_groups_by_day_without_content(
     code = main(["memory", "digest", "--config", str(valid_config_yaml)])
     assert code == EXIT_OK
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Memory Digest" in out
+    assert "Great Sage Memory Digest" in out
     assert "3 episodic" in out
     assert "ran the full test suite" not in out  # content hidden by default
 
@@ -567,7 +567,7 @@ def test_briefing_empty(valid_config_yaml: Path, capsys: pytest.CaptureFixture[s
     code = main(["briefing", "--config", str(valid_config_yaml)])
     assert code == EXIT_OK
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Briefing" in out
+    assert "Great Sage Briefing" in out
     assert "health" in out
     assert "0 in last 1 day(s)" in out
     assert "0 open" in out
@@ -662,7 +662,7 @@ def test_delegation_health_disabled_reports_unavailable(
     code = main(["delegation", "health", "--config", str(_delegation_cli_config(tmp_path))])
     assert code == EXIT_FAILURE  # disabled by config -> available False
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Delegation Health" in out
+    assert "Great Sage Delegation Health" in out
     assert "status          disabled" in out
     assert "available       False" in out
     assert "enabled         False" in out

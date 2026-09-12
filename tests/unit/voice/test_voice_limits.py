@@ -15,7 +15,7 @@ def test_defaults() -> None:
     limits = default_limits()
     assert limits.max_audio_bytes <= MAX_AUDIO_BYTES_CEILING
     assert limits.max_text_chars <= MAX_TEXT_CHARS_CEILING
-    assert limits.wake_keyword == "jarvis"
+    assert limits.wake_keyword == "great sage"
 
 
 def test_ceiling_clamps() -> None:
@@ -35,5 +35,5 @@ def test_turn_ceiling_clamps() -> None:
 
 
 def test_wake_keyword_normalized() -> None:
-    assert resolve_limits(wake_keyword="  JARVIS  ").wake_keyword == "jarvis"
-    assert resolve_limits(wake_keyword="").wake_keyword == "jarvis"
+    assert resolve_limits(wake_keyword="  GREAT SAGE  ").wake_keyword == "great sage"
+    assert resolve_limits(wake_keyword="").wake_keyword == "great sage"

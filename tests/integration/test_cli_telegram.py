@@ -15,7 +15,7 @@ def test_telegram_health_disabled_by_default(
     code = main(["telegram", "health", "--config", str(valid_config_yaml)])
     assert code == EXIT_FAILURE  # disabled by default config -> available False
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Telegram Health" in out
+    assert "Great Sage Telegram Health" in out
     assert "disabled" in out
 
 

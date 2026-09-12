@@ -2,48 +2,48 @@
 
 Commands:
 
-    jarvis config validate [--config PATH]    validate configuration
-    jarvis health [--config PATH]             boot the runtime and report health
-    jarvis ai health [--config PATH]          AI provider health table
-    jarvis ai providers [--config PATH]       list registered AI providers
-    jarvis ai benchmark [--config PATH]       read-only hardware benchmark
-    jarvis memory health [--config PATH]      memory database health
-    jarvis memory list [--config PATH]        list memories (filters + ranking)
-    jarvis memory get <id> [--config PATH]    show one memory
-    jarvis memory delete <id> [--config PATH] delete a memory (auditable)
-    jarvis memory stats [--config PATH]       counts by type + subsystem state
-    jarvis memory search <query> [--config PATH]
-    jarvis tools list [--config PATH]         list registered tools
-    jarvis tools info <tool> [--config PATH]  tool metadata + schemas
-    jarvis tools health [--config PATH]       tool subsystem health
-    jarvis tools execute <tool> NAME=VALUE …  run a tool through the security
+    greatsage config validate [--config PATH]    validate configuration
+    greatsage health [--config PATH]             boot the runtime and report health
+    greatsage ai health [--config PATH]          AI provider health table
+    greatsage ai providers [--config PATH]       list registered AI providers
+    greatsage ai benchmark [--config PATH]       read-only hardware benchmark
+    greatsage memory health [--config PATH]      memory database health
+    greatsage memory list [--config PATH]        list memories (filters + ranking)
+    greatsage memory get <id> [--config PATH]    show one memory
+    greatsage memory delete <id> [--config PATH] delete a memory (auditable)
+    greatsage memory stats [--config PATH]       counts by type + subsystem state
+    greatsage memory search <query> [--config PATH]
+    greatsage tools list [--config PATH]         list registered tools
+    greatsage tools info <tool> [--config PATH]  tool metadata + schemas
+    greatsage tools health [--config PATH]       tool subsystem health
+    greatsage tools execute <tool> NAME=VALUE …  run a tool through the security
             pipeline (denied by default; --approve opts into approvals)
-    jarvis agent health [--config PATH]        agent subsystem health
-    jarvis agent run --prompt "…" [--config PATH]  run a bounded agent task
+    greatsage agent health [--config PATH]        agent subsystem health
+    greatsage agent run --prompt "…" [--config PATH]  run a bounded agent task
             through the same security pipeline (max steps, approvals, limits)
-    jarvis delegation health [--config PATH]   delegation subsystem health
-    jarvis delegation list [--config PATH]     running tasks then recent results
-    jarvis delegation get <task_id> [--config PATH]  snapshot of one task
-    jarvis delegation cancel <task_id> [--config PATH]  cancel a running task
-    jarvis planning create --goal TEXT [--workspace PATH]  deterministic plan
-    jarvis planning get <plan_id> [--config PATH]  show one plan
-    jarvis planning list [--config PATH]  list stored plans
-    jarvis planning verify <plan_id> [--config PATH]  static check, no execution
-    jarvis planning approve <plan_id> [--config PATH]  human gate: draft→ready
-    jarvis planning health [--config PATH]  planning subsystem health
-    jarvis task run PLAN [--approve] [--verify-only]  bounded plan execution
+    greatsage delegation health [--config PATH]   delegation subsystem health
+    greatsage delegation list [--config PATH]     running tasks then recent results
+    greatsage delegation get <task_id> [--config PATH]  snapshot of one task
+    greatsage delegation cancel <task_id> [--config PATH]  cancel a running task
+    greatsage planning create --goal TEXT [--workspace PATH]  deterministic plan
+    greatsage planning get <plan_id> [--config PATH]  show one plan
+    greatsage planning list [--config PATH]  list stored plans
+    greatsage planning verify <plan_id> [--config PATH]  static check, no execution
+    greatsage planning approve <plan_id> [--config PATH]  human gate: draft→ready
+    greatsage planning health [--config PATH]  planning subsystem health
+    greatsage task run PLAN [--approve] [--verify-only]  bounded plan execution
             (verification first via verify-only; approval recorded, never assumed)
-    jarvis hud|status|dashboard [--config PATH]  read-only HUD (local-first,
+    greatsage hud|status|dashboard [--config PATH]  read-only HUD (local-first,
             zero-cost status/dashboard over health, memory, agent,
             delegation, workspace, planning, task)
-    jarvis vision health [--config PATH]           vision subsystem health
-    jarvis vision capture [--width N] [--height N] [--out PATH]
+    greatsage vision health [--config PATH]           vision subsystem health
+    greatsage vision capture [--width N] [--height N] [--out PATH]
             capture a bounded local frame (metadata only, never pixels)
-    jarvis vision describe [--capture-id ID]       OCR-free stub description
-    jarvis voice health [--config PATH]            voice subsystem health
-    jarvis voice listen (--text TEXT | --audio-path PATH) [--session-id ID]
+    greatsage vision describe [--capture-id ID]       OCR-free stub description
+    greatsage voice health [--config PATH]            voice subsystem health
+    greatsage voice listen (--text TEXT | --audio-path PATH) [--session-id ID]
             transcribe one bounded turn (mock STT, metadata + text)
-    jarvis voice speak --text TEXT [--out PATH] [--session-id ID]
+    greatsage voice speak --text TEXT [--out PATH] [--session-id ID]
             synthesize one bounded utterance (mock TTS, WAV)
 
 Exit codes: 0 success, 1 general failure, 2 invalid configuration/input.
@@ -145,8 +145,8 @@ def _installed_version() -> str:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="jarvis",
-        description="J.A.R.V.I.S. — Just A Rather Very Intelligent System",
+        prog="greatsage",
+        description="Great Sage (Wise One) — state your query",
     )
     parser.add_argument("--version", action="version", version=f"jarvis {_installed_version()}")
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
@@ -660,7 +660,7 @@ def _cmd_ai_health(args: argparse.Namespace) -> int:
     if not registry_health:
         print("No AI providers configured.")
         return EXIT_OK
-    print("J.A.R.V.I.S. AI Provider Health")
+    print("Great Sage AI Provider Health")
     for provider_id, health in sorted(registry_health.items()):
         state = health.state.value
         print(f"  {provider_id:<12} {state:<14} {health.detail or ''}")
@@ -685,7 +685,7 @@ def _cmd_ai_providers(args: argparse.Namespace) -> int:
     if not snapshot:
         print("No AI providers configured.")
         return EXIT_OK
-    print("J.A.R.V.I.S. AI Providers")
+    print("Great Sage AI Providers")
     for provider_id, info in sorted(snapshot.items()):
         caps = ", ".join(info["capabilities"])
         print(f"  {provider_id:<12} state={info['state']:<14} caps=[{caps}]")
@@ -790,7 +790,7 @@ def _cmd_memory_health(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
     else:
-        print("J.A.R.V.I.S. Memory Health")
+        print("Great Sage Memory Health")
         print(f"  status       {data.get('status', 'unknown')}")
         print(f"  detail       {data.get('detail') or ''}")
         for key in (
@@ -825,7 +825,7 @@ def _cmd_memory_list(args: argparse.Namespace) -> int:
     _print_memories(
         runtime.memory, result.items, result.total,
         include_content=args.content, json_mode=args.json,
-        header="J.A.R.V.I.S. Memory",
+        header="Great Sage Memory",
     )
     return EXIT_OK
 
@@ -853,7 +853,7 @@ def _cmd_memory_get(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(memory.to_dict(include_content=args.content), indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Memory")
+    print("Great Sage Memory")
     print(f"  id           {memory.id}")
     print(f"  type         {memory.memory_type.value}")
     print(f"  source       {memory.source}")
@@ -935,7 +935,7 @@ def _cmd_memory_stats(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(stats, indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Memory Stats")
+    print("Great Sage Memory Stats")
     for memory_type in MemoryType:
         count = stats["by_type"].get(memory_type.value, 0)
         print(f"  {memory_type.value:<12} {count}")
@@ -972,7 +972,7 @@ def _cmd_memory_search(args: argparse.Namespace) -> int:
     _print_memories(
         runtime.memory, result.items, result.total,
         include_content=args.content, json_mode=args.json,
-        header=f"J.A.R.V.I.S. Memory Search: {args.query!r}",
+        header=f"Great Sage Memory Search: {args.query!r}",
     )
     return EXIT_OK
 
@@ -1049,7 +1049,7 @@ def _cmd_memory_digest(args: argparse.Namespace) -> int:
         print(json.dumps({"days": days_out, "total": result.total}, indent=2))
         return EXIT_OK
     scope = f"session {args.session} " if getattr(args, "session", None) else ""
-    print(f"J.A.R.V.I.S. Memory Digest ({scope}last {days} day(s))")
+    print(f"Great Sage Memory Digest ({scope}last {days} day(s))")
     if not days_out:
         print("  (none)")
         return EXIT_OK
@@ -1103,7 +1103,7 @@ def _cmd_tools_list(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps({"tools": descriptions}, indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Tools")
+    print("Great Sage Tools")
     for info in descriptions:
         print(
             f"  {info['id']:<22} {info['risk_level']:<9} "
@@ -1153,7 +1153,7 @@ def _cmd_tools_health(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
     else:
-        print("J.A.R.V.I.S. Tool Health")
+        print("Great Sage Tool Health")
         print(f"  status    {data.get('status', 'unknown')}")
         print(f"  mode      {data.get('mode', '-')}")
         print(f"  detail    {data.get('detail') or ''}")
@@ -1234,7 +1234,7 @@ def _cmd_agent_health(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK if data.get("available", False) else EXIT_FAILURE
-    print("J.A.R.V.I.S. Agent Health")
+    print("Great Sage Agent Health")
     print(f"  status    {data.get('status', 'unknown')}")
     print(f"  available {data.get('available', False)}")
     print(f"  enabled   {data.get('enabled', '-')}")
@@ -1284,7 +1284,7 @@ def _cmd_agent_run(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(result.to_dict(), indent=2))
         return EXIT_OK if completed else EXIT_FAILURE
-    print("J.A.R.V.I.S. Agent Run")
+    print("Great Sage Agent Run")
     print(f"  task_id      {result.task_id}")
     print(f"  state        {result.state.value}")
     print(f"  steps        {result.steps}")
@@ -1324,7 +1324,7 @@ def _cmd_delegation_health(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK if data.get("available", False) else EXIT_FAILURE
-    print("J.A.R.V.I.S. Delegation Health")
+    print("Great Sage Delegation Health")
     print(f"  status          {data.get('status', 'unknown')}")
     print(f"  available       {data.get('available', False)}")
     print(f"  enabled         {data.get('enabled', '-')}")
@@ -1360,7 +1360,7 @@ def _cmd_delegation_list(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(tasks, indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Delegation Tasks")
+    print("Great Sage Delegation Tasks")
     if not tasks:
         print("  (no tasks)")
     for task in tasks:
@@ -1395,7 +1395,7 @@ def _cmd_delegation_get(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Delegation Task")
+    print("Great Sage Delegation Task")
     for name, value in data.items():
         if name == "diff" and value:
             print(f"  {name}")
@@ -1428,7 +1428,7 @@ def _cmd_delegation_cancel(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Delegation Cancel")
+    print("Great Sage Delegation Cancel")
     print(f"  task_id    {data.get('task_id', '-')}")
     print(f"  state      {data.get('state', 'unknown')}")
     print(f"  cancelling {data.get('cancelling', False)}")
@@ -1458,7 +1458,7 @@ def _cmd_workspace_scan(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Workspace Scan")
+    print("Great Sage Workspace Scan")
     print(f"  id           {data.get('id', '-')}")
     print(f"  root         {data.get('root', '-')}")
     print(f"  project_type {data.get('project_type', '-')}")
@@ -1498,7 +1498,7 @@ def _cmd_workspace_info(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Workspace Info")
+    print("Great Sage Workspace Info")
     for k, v in data.items():
         if k == "entry_points":
             print(f"  {k:<14} {len(v)} entries")
@@ -1522,7 +1522,7 @@ def _cmd_workspace_health(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK if data.get("available", False) else EXIT_FAILURE
-    print("J.A.R.V.I.S. Workspace Health")
+    print("Great Sage Workspace Health")
     print(f"  status    {data.get('status', 'unknown')}")
     print(f"  available {data.get('available', False)}")
     print(f"  enabled   {data.get('enabled', '-')}")
@@ -1547,7 +1547,7 @@ def _cmd_task_run(args: argparse.Namespace) -> int:
                 if args.json:
                     print(json.dumps(data, indent=2))
                     return EXIT_OK if ok else EXIT_FAILURE
-                print("J.A.R.V.I.S. Task Verify")
+                print("Great Sage Task Verify")
                 print(f"  plan_id  {data.get('plan_id', '-')}")
                 print(f"  ok       {ok}")
                 for err in data.get("errors", []):
@@ -1574,7 +1574,7 @@ def _cmd_task_run(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK if success else EXIT_FAILURE
-    print("J.A.R.V.I.S. Task Run")
+    print("Great Sage Task Run")
     print(f"  task_id  {data.get('task_id', '-')}")
     print(f"  plan_id  {data.get('plan_id', '-')}")
     print(f"  state    {data.get('state', '-')}")
@@ -1606,7 +1606,7 @@ def _cmd_task_resume(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK if success else EXIT_FAILURE
-    print("J.A.R.V.I.S. Task Resume")
+    print("Great Sage Task Resume")
     print(f"  task_id  {data.get('task_id', '-')}")
     print(f"  state    {data.get('state', '-')}")
     return EXIT_OK if success else EXIT_FAILURE
@@ -1629,7 +1629,7 @@ def _cmd_task_list(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(items, indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Tasks")
+    print("Great Sage Tasks")
     if not items:
         print("  (none)")
     for it in items:
@@ -1657,7 +1657,7 @@ def _cmd_task_get(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Task")
+    print("Great Sage Task")
     for k, v in data.items():
         if k == "step_results":
             print(f"  {k}: {len(v)} steps")
@@ -1688,7 +1688,7 @@ def _cmd_task_cancel(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Task Cancel")
+    print("Great Sage Task Cancel")
     print(f"  task_id    {data.get('task_id','-')}")
     print(f"  cancelling {data.get('cancelling', False)}")
     return EXIT_OK
@@ -1707,7 +1707,7 @@ def _cmd_task_health(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK if data.get("available", False) else EXIT_FAILURE
-    print("J.A.R.V.I.S. Task Health")
+    print("Great Sage Task Health")
     print(f"  status    {data.get('status','unknown')}")
     print(f"  available {data.get('available', False)}")
     print(f"  enabled   {data.get('enabled','-')}")
@@ -1739,7 +1739,7 @@ def _cmd_planning_create(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Plan")
+    print("Great Sage Plan")
     print(f"  plan_id  {data.get('id', '-')}")
     print(f"  goal     {data.get('goal', '-')}")
     print(f"  status   {data.get('status', '-')}")
@@ -1768,7 +1768,7 @@ def _cmd_planning_get(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Plan")
+    print("Great Sage Plan")
     for key, value in data.items():
         if key == "steps":
             print(f"  steps: {len(value)} step(s)")
@@ -1796,7 +1796,7 @@ def _cmd_planning_list(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(items, indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Plans")
+    print("Great Sage Plans")
     if not items:
         print("  (none)")
     for item in items:
@@ -1825,7 +1825,7 @@ def _cmd_planning_verify(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK if ok else EXIT_FAILURE
-    print("J.A.R.V.I.S. Plan Verify")
+    print("Great Sage Plan Verify")
     print(f"  plan_id  {data.get('plan_id', '-')}")
     print(f"  ok       {ok}")
     for err in data.get("errors", []):
@@ -1857,7 +1857,7 @@ def _cmd_planning_approve(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Plan Approved")
+    print("Great Sage Plan Approved")
     print(f"  plan_id  {data.get('id', '-')}")
     print(f"  status   {data.get('status', '-')}")
     return EXIT_OK
@@ -1876,7 +1876,7 @@ def _cmd_planning_health(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK if data.get("available", False) else EXIT_FAILURE
-    print("J.A.R.V.I.S. Planning Health")
+    print("Great Sage Planning Health")
     print(f"  status    {data.get('status','unknown')}")
     print(f"  available {data.get('available', False)}")
     print(f"  enabled   {data.get('enabled','-')}")
@@ -1967,7 +1967,7 @@ def _cmd_schedule_list(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(items, indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Schedules")
+    print("Great Sage Schedules")
     if not items:
         print("  (none)")
     for it in items:
@@ -2040,7 +2040,7 @@ def _cmd_schedule_health(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK if data.get("available", False) else EXIT_FAILURE
-    print("J.A.R.V.I.S. Scheduler Health")
+    print("Great Sage Scheduler Health")
     print(f"  status    {data.get('status','unknown')}")
     print(f"  available {data.get('available', False)}")
     print(f"  enabled   {data.get('enabled','-')}")
@@ -2082,7 +2082,7 @@ def _telegram_briefing_text(runtime: Runtime, include_content: bool) -> str:
 
 def _telegram_status_text(runtime: Runtime) -> str:
     try:
-        return f"J.A.R.V.I.S. {runtime.overall_health().value}"
+        return f"Great Sage {runtime.overall_health().value}"
     except Exception as exc:
         return f"status unavailable: {exc}"[:200]
 
@@ -2146,7 +2146,7 @@ def _cmd_telegram_health(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK if data.get("available", False) else EXIT_FAILURE
-    print("J.A.R.V.I.S. Telegram Health")
+    print("Great Sage Telegram Health")
     print(f"  status    {data.get('status','unknown')}")
     print(f"  available {data.get('available', False)}")
     print(f"  enabled   {data.get('enabled','-')}")
@@ -2248,7 +2248,7 @@ def _cmd_vision_health(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK if data.get("available", False) else EXIT_FAILURE
-    print("J.A.R.V.I.S. Vision Health")
+    print("Great Sage Vision Health")
     print(f"  status    {data.get('status', 'unknown')}")
     print(f"  available {data.get('available', False)}")
     print(f"  backend   {data.get('backend', '-')}")
@@ -2281,7 +2281,7 @@ def _cmd_vision_capture(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(record.to_dict(), indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Vision Capture")
+    print("Great Sage Vision Capture")
     print(f"  id           {record.id}")
     print(f"  backend      {record.backend.value}")
     print(f"  dimensions   {record.width}x{record.height}")
@@ -2323,7 +2323,7 @@ def _cmd_vision_describe(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(description.to_dict(), indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Vision Description")
+    print("Great Sage Vision Description")
     print(f"  capture_id {description.capture_id}")
     print(f"  backend    {description.backend.value}")
     print(f"  summary    {description.summary}")
@@ -2359,7 +2359,7 @@ def _cmd_voice_health(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(data, indent=2))
         return EXIT_OK if data.get("available", False) else EXIT_FAILURE
-    print("J.A.R.V.I.S. Voice Health")
+    print("Great Sage Voice Health")
     print(f"  status    {data.get('status', 'unknown')}")
     print(f"  available {data.get('available', False)}")
     print(f"  stt       {data.get('stt_backend', '-')}")
@@ -2403,7 +2403,7 @@ def _cmd_voice_listen(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(record.to_dict(include_text=True), indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Voice Transcript")
+    print("Great Sage Voice Transcript")
     print(f"  id         {record.id}")
     print(f"  backend    {record.backend.value}")
     print(f"  text_chars {record.text_chars}")
@@ -2436,7 +2436,7 @@ def _cmd_voice_speak(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(record.to_dict(), indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Voice Speech")
+    print("Great Sage Voice Speech")
     print(f"  id           {record.id}")
     print(f"  backend      {record.backend.value}")
     print(f"  text_chars   {record.text_chars}")
@@ -2458,7 +2458,7 @@ def _cmd_health(args: argparse.Namespace) -> int:
         print(f"jarvis health: {exc}", file=sys.stderr)
         return EXIT_FAILURE
 
-    print("J.A.R.V.I.S. Health")
+    print("Great Sage Health")
     try:
         reports = runtime.health_report()
         for report in reports:
@@ -2566,7 +2566,7 @@ def _cmd_briefing(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(brief, indent=2))
         return EXIT_OK
-    print("J.A.R.V.I.S. Briefing")
+    print("Great Sage Briefing")
     health = brief.get("health", {})
     print(f"  health     {health.get('overall', 'unknown')}")
     for component in health.get("components", []):

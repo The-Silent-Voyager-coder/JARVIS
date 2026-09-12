@@ -68,7 +68,7 @@ class OllamaEmbeddingProvider:
         request = urllib.request.Request(
             self._base_url + "/api/embed",
             data=payload,
-            headers={"Content-Type": "application/json", "User-Agent": "JARVIS-local/1.0"},
+            headers={"Content-Type": "application/json", "User-Agent": "GreatSage-local/1.0"},
             method="POST",
         )
         try:

@@ -57,7 +57,7 @@ class KeywordWakeDetector(WakeWordDetector):
 
     def __init__(
         self,
-        keyword: str = "jarvis",
+        keyword: str = "great sage",
         *,
         limits: VoiceLimits | None = None,
     ) -> None:
@@ -110,7 +110,7 @@ class FuzzyWakeDetector(WakeWordDetector):
 
     def __init__(
         self,
-        keyword: str = "jarvis",
+        keyword: str = "great sage",
         *,
         limits: VoiceLimits | None = None,
         aliases: tuple[str, ...] = WAKE_ALIASES,

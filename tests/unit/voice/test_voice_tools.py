@@ -166,7 +166,7 @@ def test_speak_tool_rejects_oversize() -> None:
 
 
 def test_wake_tool(tmp_path: Path) -> None:
-    result = VoiceWakeTool().execute({"text": "hey jarvis"}, make_context(tmp_path))
+    result = VoiceWakeTool().execute({"text": "hey great sage"}, make_context(tmp_path))
     assert result.success
     assert result.output is not None
     assert result.output["detected"] is True

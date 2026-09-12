@@ -200,7 +200,9 @@ def test_split_model_shapes() -> None:
 
     assert P._split_model(None) == (None, None)
     assert P._split_model("") == (None, None)
-    assert P._split_model("opencode/m#xhigh") == ({"providerID": "opencode", "modelID": "m"}, "xhigh")
+    assert P._split_model("opencode/m#xhigh") == (
+        {"providerID": "opencode", "modelID": "m"}, "xhigh",
+    )
     assert P._split_model("opencode/m") == ({"providerID": "opencode", "modelID": "m"}, None)
     assert P._split_model("m") == ({"providerID": "opencode", "modelID": "m"}, None)
 

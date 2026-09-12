@@ -59,7 +59,7 @@ def test_vision_health(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> No
     code = main(["vision", "health", "--config", str(config)])
     assert code == EXIT_OK
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Vision Health" in out
+    assert "Great Sage Vision Health" in out
     assert "stub" in out
 
 
@@ -77,7 +77,7 @@ def test_vision_capture(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> N
     code = main(["vision", "capture", "--width", "32", "--height", "20", "--config", str(config)])
     assert code == EXIT_OK
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Vision Capture" in out
+    assert "Great Sage Vision Capture" in out
     assert "32x20" in out
 
 
@@ -96,7 +96,7 @@ def test_vision_describe_latest(tmp_path: Path, capsys: pytest.CaptureFixture[st
     code = main(["vision", "describe", "--config", str(config)])
     assert code == EXIT_OK
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Vision Description" in out
+    assert "Great Sage Vision Description" in out
     assert "stub-no-ocr" in out
 
 

@@ -1,10 +1,12 @@
-# J.A.R.V.I.S.
+# Great Sage
 
-**Just A Rather Very Intelligent System**
+**Wise One — state your query.**
 
 A modular, local-first, zero-cost personal AI operating system for Windows 11.
+Formerly Great Sage (Just A Rather Very Intelligent System) — kept here
+as lore; the architecture continues unchanged under its new name.
 
-J.A.R.V.I.S. is **not** a chatbot. It is an infrastructure-first platform that
+Great Sage is **not** a chatbot. It is an infrastructure-first platform that
 will eventually converse naturally (voice + text), remember, plan, run tools,
 control the computer safely, delegate coding work to OpenCode, monitor
 long-running objectives, and recover from failures.
@@ -14,7 +16,7 @@ long-running objectives, and recover from failures.
 | Platform | Windows 11 |
 | Cost | ₹0 / $0 — no paid APIs, no paid hosting, no paid cloud |
 | Language | Python 3.11+ |
-| Status | **Phase 5B — Controlled OpenCode delegation** (JARVIS is authority, OpenCode is delegated executor) |
+| Status | **Phase 5B — Controlled OpenCode delegation** (Great Sage is authority, OpenCode is delegated executor) |
 
 ---
 
@@ -40,7 +42,7 @@ foundation; Phase 4 adds the permissioned tool system on top of all three:
   command classifier (`safe`/`restricted`/`dangerous`/`forbidden`, case- and
   `.exe`-insensitive), and sensitive-argument detection (credentials denied)
 - **Execution bounds**: no `shell=True` anywhere; every run has a timeout,
-  bounded output (truncation marker), a scrubbed environment (JARVIS secrets
+  bounded output (truncation marker), a scrubbed environment (Great Sage secrets
   never reach tools), and an explicit working directory
 - **Intentional absences**: no `filesystem.delete` and no `process.terminate`
   tool; `network`/`browser`/`gui` categories reserved for later phases
@@ -49,7 +51,7 @@ foundation; Phase 4 adds the permissioned tool system on top of all three:
   argument values are never included
 - **Failure isolation**: a broken tool configuration degrades the subsystem
   to `unavailable` while the rest of the runtime keeps working
-- **CLI**: `jarvis tools list|info|health|execute [--json] [--approve]`
+- **CLI**: `greatsage tools list|info|health|execute [--json] [--approve]`
 - **No new dependencies**: stdlib only; PyYAML remains the sole runtime
   dependency
 
@@ -61,7 +63,7 @@ Phase 5A adds the bounded, auditable AI↔tool loop on top of all four layers:
   step → the tool security pipeline executes it → the result feeds the next
   step; provider-neutral models throughout (never OpenCode-specific)
 - **No bypass**: the loop drives `ToolService.execute` only — the same
-  policy/approval/audit pipeline as `jarvis tools execute`
+  policy/approval/audit pipeline as `greatsage tools execute`
   (**AI ≠ authority; Tool Security = authority; Agent Orchestrator =
   control flow**)
 - **Validated state machine**: `pending → running ⇄ executing_tool ⇄
@@ -77,7 +79,7 @@ Phase 5A adds the bounded, auditable AI↔tool loop on top of all four layers:
 - **Cooperative cancellation** at every checkpoint + wall-clock timeout +
   `AGENT_*` audit events (no prompts, no secrets; Phase 4 `TOOL_*` events
   keep flowing)
-- **CLI**: `jarvis agent health|run --prompt … [--json]`; exit 0/1/2
+- **CLI**: `greatsage agent health|run --prompt … [--json]`; exit 0/1/2
 - **Tests**: full agent unit suite (incl. a threaded approval-deadlock
   regression), offline CLI integration suite, scripted mock-provider
   tool-call tests; ruff + mypy clean
@@ -91,14 +93,15 @@ remains future work.
 
 ## Current Status (Phase 5B)
 
-Phase 5B adds controlled OpenCode delegation under full JARVIS authority:
+Phase 5B adds controlled OpenCode delegation under full Great Sage authority:
 
-- **JARVIS is authority, OpenCode is executor**: `USER → JARVIS → AgentOrchestrator → DelegationManager → JARVIS SecurityPolicy → OpenCode Provider → OpenCode Server → SSE → JARVIS events`. OpenCode never bypasses the security layer.
-- **Provider-neutral delegation**: `DelegationManager` talks only to a `DelegationProvider` protocol (`Capability.DELEGATION`); OpenCode-specific wire formats stay in `jarvis/intelligence/opencode.py`.
-- **Secure permission routing**: every executor permission (`read`/`edit`/`write`/`bash`/`webfetch`/`websearch`/`task`/`skill`…) is mapped to a JARVIS `ToolCategory`/`ToolRisk`; unknown actions default to `HIGH`/`SYSTEM` and are `ASK`-gated; `ALLOW` auto-approves only `SAFE`/`LOW` inside allowed roots, `DENY` blocks `CRITICAL`/forbidden commands and protected paths.
+- **Great Sage is authority, OpenCode is executor**: `USER → Great Sage → AgentOrchestrator → DelegationManager → Great Sage SecurityPolicy → OpenCode Provider → OpenCode Server → SSE → Great Sage events`. OpenCode never bypasses the security layer.
+- **Provider-neutral delegation**: `DelegationManager` talks only to a `DelegationProvider` protocol (`Capability.DELEGATION`); OpenCode-specific wire formats stay in `greatsage/intelligence/opencode.py`.
+- **Secure permission routing**: every executor permission (`read`/`edit`/`write`/`bash`/`webfetch`/`websearch`/`task`/`skill`…) is mapped to a Great Sage `ToolCategory`/`ToolRisk`; unknown actions default to `HIGH`/`SYSTEM` and are `ASK`-gated; `ALLOW` auto-approves only `SAFE`/`LOW` inside allowed roots, `DENY` blocks `CRITICAL`/forbidden commands and protected paths.
 - **Hard-bounded execution**: `max_wall_time_seconds` (1800s default, 7200s ceiling), `max_output_bytes` (4 MiB/32 MiB), `max_permission_requests` (50/200), `max_session_count` (3/10), `max_delegation_depth` (1 — no recursion), `SSE_RECONNECT_LIMIT` (3) — validated at config load and re-validated per run.
 - **Full lifecycle**: `DelegationState` (`created → starting → running ⇄ waiting_for_permission → completing → completed/failed/cancelled/timed_out`), bounded SSE with malformed-event tolerance, timeout/cancellation/diff retrieval, session cleanup, and `DELEGATION_*` + `TOOL_*` audit events (no prompts, no secrets).
-- **CLI**: `jarvis delegation health|list|get <task_id>|cancel <task_id> [--json]` (same auth path as `jarvis agent`/`tools`).
+- **CLI**: `greatsage delegation health|list|get <task_id>|cancel <task_id> [--json]` (same auth path as
+`greatsage agent`/`tools`).
 - **Tests**: 1035 passing (Sept 2026 baseline; incl. 55 delegation, 32 OpenCode),
   `ruff`/`mypy` clean.
 
@@ -123,10 +126,10 @@ Phase 5B adds controlled OpenCode delegation under full JARVIS authority:
 ## Repository Layout
 
 ```text
-jarvis/
+greatsage/
 ├── docs/            → architecture & engineering documents (read first)
 ├── config/          → example configuration
-├── jarvis/          → Python package; one module per subsystem
+├── greatsage/       → Python package; one module per subsystem
 │   ├── core/            → lifecycle, registry, health, runtime
 │   ├── configuration/   → typed config loader + validator
 │   ├── events/          → event bus + catalog
@@ -150,71 +153,73 @@ jarvis/
 
 ## Quick Start
 
+> State your query. Great Sage acknowledges.
+
 ```powershell
 # create the virtual environment and install (editable, with dev tools)
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 
 # validate the configuration (defaults or your own file)
-.\.venv\Scripts\jarvis.exe config validate
-.\.venv\Scripts\jarvis.exe config validate --config config\jarvis.example.yaml
+.\.venv\Scripts\greatsage.exe config validate
+.\.venv\Scripts\greatsage.exe config validate --config config\sage.example.yaml
 
 # boot the runtime and report component health
-.\.venv\Scripts\jarvis.exe health
+.\.venv\Scripts\greatsage.exe health
 
 # inspect the AI provider layer (works with Ollama running or absent)
-.\.venv\Scripts\jarvis.exe ai health
-.\.venv\Scripts\jarvis.exe ai providers
-.\.venv\Scripts\jarvis.exe ai benchmark
+.\.venv\Scripts\greatsage.exe ai health
+.\.venv\Scripts\greatsage.exe ai providers
+.\.venv\Scripts\greatsage.exe ai benchmark
 
 # inspect the memory subsystem (persistent SQLite; database created on first use)
-.\.venv\Scripts\jarvis.exe memory health
-.\.venv\Scripts\jarvis.exe memory stats
-.\.venv\Scripts\jarvis.exe memory search "api key" --content
-.\.venv\Scripts\jarvis.exe memory list --type long_term
-.\.venv\Scripts\jarvis.exe memory digest --days 7
-.\.venv\Scripts\jarvis.exe memory get mem_<id> --content
-.\.venv\Scripts\jarvis.exe memory delete mem_<id>   # auditable soft delete
+.\.venv\Scripts\greatsage.exe memory health
+.\.venv\Scripts\greatsage.exe memory stats
+.\.venv\Scripts\greatsage.exe memory search "api key" --content
+.\.venv\Scripts\greatsage.exe memory list --type long_term
+.\.venv\Scripts\greatsage.exe memory digest --days 7
+.\.venv\Scripts\greatsage.exe memory get mem_<id> --content
+.\.venv\Scripts\greatsage.exe memory delete mem_<id>   # auditable soft delete
 
 # daily brief: health + recent episodes + open tasks/plans + delegation
-.\.venv\Scripts\jarvis.exe briefing
-.\.venv\Scripts\jarvis.exe briefing --days 7 --content
+.\.venv\Scripts\greatsage.exe briefing
+.\.venv\Scripts\greatsage.exe briefing --days 7 --content
 
 # inspect and drive the secure tool system (files/processes/shell/system)
-.\.venv\Scripts\jarvis.exe tools list
-.\.venv\Scripts\jarvis.exe tools info filesystem.write
-.\.venv\Scripts\jarvis.exe tools health
-.\.venv\Scripts\jarvis.exe tools execute system.info
-.\.venv\Scripts\jarvis.exe tools execute shell.execute --approve \
+.\.venv\Scripts\greatsage.exe tools list
+.\.venv\Scripts\greatsage.exe tools info filesystem.write
+.\.venv\Scripts\greatsage.exe tools health
+.\.venv\Scripts\greatsage.exe tools execute system.info
+.\.venv\Scripts\greatsage.exe tools execute shell.execute --approve \
     'command=["python", "--version"]'
 # medium/high-risk tools need --approve; dangerous commands and paths
 # outside allowed roots are denied by policy either way
 
 # inspect and drive the bounded agent loop (needs a tool-calling provider)
-.\.venv\Scripts\jarvis.exe agent health
-.\.venv\Scripts\jarvis.exe agent run --prompt "summarize this repo"
-.\.venv\Scripts\jarvis.exe agent run --prompt "check the system" --json
+.\.venv\Scripts\greatsage.exe agent health
+.\.venv\Scripts\greatsage.exe agent run --prompt "summarize this repo"
+.\.venv\Scripts\greatsage.exe agent run --prompt "check the system" --json
 # runs are always bounded: step/tool-call/wall-clock limits with ceilings
 
 # inspect and drive controlled delegation (needs OpenCode server at 127.0.0.1:4096)
-.\.venv\Scripts\jarvis.exe delegation health
-.\.venv\Scripts\jarvis.exe delegation list
-.\.venv\Scripts\jarvis.exe delegation get <task_id>
-.\.venv\Scripts\jarvis.exe delegation cancel <task_id>
-# delegation is provider-neutral, bounded, and always via JARVIS SecurityPolicy
+.\.venv\Scripts\greatsage.exe delegation health
+.\.venv\Scripts\greatsage.exe delegation list
+.\.venv\Scripts\greatsage.exe delegation get <task_id>
+.\.venv\Scripts\greatsage.exe delegation cancel <task_id>
+# delegation is provider-neutral, bounded, and always via Great Sage SecurityPolicy
 
 # recurring local jobs (no daemon — tick directly or from Task Scheduler)
-.\.venv\Scripts\jarvis.exe schedule add --name morning --kind briefing --every 86400
-.\.venv\Scripts\jarvis.exe schedule tick
+.\.venv\Scripts\greatsage.exe schedule add --name morning --kind briefing --every 86400
+.\.venv\Scripts\greatsage.exe schedule tick
 
 # remote chat from your phone (needs TELEGRAM_BOT_TOKEN + allowlisted chat)
-.\.venv\Scripts\jarvis.exe telegram health
-.\.venv\Scripts\jarvis.exe telegram listen --once
+.\.venv\Scripts\greatsage.exe telegram health
+.\.venv\Scripts\greatsage.exe telegram listen --once
 
 # run the test suite, linter, and type checker
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -m ruff check .
-.\.venv\Scripts\python.exe -m mypy jarvis
+.\.venv\Scripts\python.exe -m mypy greatsage
 ```
 
 Exit codes: `0` success, `1` general failure (e.g. a provider unhealthy, a
@@ -224,14 +229,14 @@ configuration/input.
 The `ai` commands probe configured providers (`ai.providers.*`); Ollama
 absent or not running is fine — the provider reports `unavailable` and the
 CLI still exits cleanly (exit `1` from `ai health`). No models are ever
-downloaded by J.A.R.V.I.S. The `memory` commands need no AI services at all:
+downloaded by Great Sage The `memory` commands need no AI services at all:
 they read/write the local SQLite database configured under `memory.*`.
 Memory content is shown only with `--content`; every command supports
 `--json`.
 
 ## Reading Order
 
-1. `docs/ARCHITECTURE.md` — how J.A.R.V.I.S. is built
+1. `docs/ARCHITECTURE.md` — how Great Sage is built
 2. `docs/DEVELOPMENT_RULES.md` — hard engineering rules for contributors/agents
 3. `docs/INTERFACES.md` — core interfaces (AIProvider, memory, events, tasks, agent)
 4. `docs/CONFIGURATION.md` — how configuration works

@@ -12,7 +12,7 @@ from jarvis.interface.models import HudSnapshot
 
 def format_status(snapshot: HudSnapshot) -> str:
     """Compact status: overall plus the component table."""
-    lines = ["J.A.R.V.I.S. Status", f"  overall      {snapshot.overall}"]
+    lines = ["Great Sage Status", f"  overall      {snapshot.overall}"]
     if not snapshot.components:
         lines.append("  components   (unavailable)")
     for entry in snapshot.components:

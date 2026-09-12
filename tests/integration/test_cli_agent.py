@@ -110,7 +110,7 @@ def test_agent_health_offline(tmp_path: Path, capsys: pytest.CaptureFixture[str]
     code = main(["agent", "health", "--config", str(config)])
     assert code == EXIT_OK
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Agent Health" in out
+    assert "Great Sage Agent Health" in out
     assert "status    healthy" in out
     assert "available True" in out
     assert "steps<=" in out
@@ -134,7 +134,7 @@ def test_agent_run_safe_loop(
     code = main(["agent", "run", "--prompt", "check the system", "--config", str(config)])
     assert code == EXIT_OK
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Agent Run" in out
+    assert "Great Sage Agent Run" in out
     assert "state        completed" in out
     assert "tool_calls   1" in out
     assert "System checked via agent loop." in out

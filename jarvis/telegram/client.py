@@ -28,7 +28,7 @@ def _api(token: str, method: str, params: dict[str, Any], timeout: float) -> Any
     except (TypeError, ValueError) as exc:
         raise TelegramError(f"bad {method} params: {exc}") from exc
     request = urllib.request.Request(
-        url, data=data, headers={"User-Agent": "JARVIS-local/1.0"}, method="POST"
+        url, data=data, headers={"User-Agent": "GreatSage-local/1.0"}, method="POST"
     )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -111,7 +111,7 @@ class TelegramClient:
             data=bytes(body),
             headers={
                 "Content-Type": f"multipart/form-data; boundary={boundary.decode('ascii')}",
-                "User-Agent": "JARVIS-local/1.0",
+                "User-Agent": "GreatSage-local/1.0",
             },
             method="POST",
         )

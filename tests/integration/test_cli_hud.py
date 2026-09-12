@@ -93,12 +93,12 @@ def test_status_and_dashboard_text(tmp_path: Path, capsys: pytest.CaptureFixture
     code = main(["status", "--config", str(cfg)])
     assert code == EXIT_OK
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Status" in out
+    assert "Great Sage Status" in out
 
     code = main(["dashboard", "--config", str(cfg)])
     assert code == EXIT_OK
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Status" in out
+    assert "Great Sage Status" in out
     assert "[memory]" in out
 
 

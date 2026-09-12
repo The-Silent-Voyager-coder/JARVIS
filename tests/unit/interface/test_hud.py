@@ -146,9 +146,9 @@ def test_status_is_compact() -> None:
 
 def test_formatters_render_headers() -> None:
     snapshot = HudService().snapshot(_StubRuntime())  # type: ignore[arg-type]
-    assert "J.A.R.V.I.S. Status" in format_status(snapshot)
+    assert "Great Sage Status" in format_status(snapshot)
     dashboard = format_dashboard(snapshot)
-    assert "J.A.R.V.I.S. Status" in dashboard
+    assert "Great Sage Status" in dashboard
     for section in ("memory", "agent", "delegation", "workspace", "planning", "task"):
         assert f"[{section}]" in dashboard
 

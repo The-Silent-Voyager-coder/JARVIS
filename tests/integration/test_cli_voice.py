@@ -59,7 +59,7 @@ def test_voice_health(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> Non
     code = main(["voice", "health", "--config", str(config)])
     assert code == EXIT_OK
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Voice Health" in out
+    assert "Great Sage Voice Health" in out
     assert "mock" in out
 
 
@@ -77,7 +77,7 @@ def test_voice_listen_text(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -
     code = main(["voice", "listen", "--text", "hello jarvis", "--config", str(config)])
     assert code == EXIT_OK
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Voice Transcript" in out
+    assert "Great Sage Voice Transcript" in out
     assert "hello jarvis" in out
 
 
@@ -104,7 +104,7 @@ def test_voice_speak(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None
     code = main(["voice", "speak", "--text", "hello", "--config", str(config)])
     assert code == EXIT_OK
     out = capsys.readouterr().out
-    assert "J.A.R.V.I.S. Voice Speech" in out
+    assert "Great Sage Voice Speech" in out
 
 
 def test_voice_speak_outside_roots_invalid(
