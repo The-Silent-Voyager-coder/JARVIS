@@ -23,7 +23,7 @@ def test_system_info_shape(tmp_path: Path) -> None:
     result = SystemInfoTool().execute({}, make_context(tmp_path))
     assert result.success
     output = result.output
-    for key in ("jarvis_version", "platform", "cpu", "memory", "storage", "gpu",
+    for key in ("sage_version", "platform", "cpu", "memory", "storage", "gpu",
                 "gpu_detectable"):
         assert key in output
     assert output["platform"]["system"] == "Windows"

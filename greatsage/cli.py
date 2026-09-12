@@ -138,7 +138,7 @@ COMPONENT_LABELS: dict[str, str] = {
 
 def _installed_version() -> str:
     try:
-        return version("jarvis")
+        return version("great-sage")
     except PackageNotFoundError:
         return __version__
 
@@ -148,7 +148,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="greatsage",
         description="Great Sage (Wise One) — state your query",
     )
-    parser.add_argument("--version", action="version", version=f"jarvis {_installed_version()}")
+    parser.add_argument("--version", action="version", version=f"greatsage {_installed_version()}")
     subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
 
     validate_parser = subparsers.add_parser("config", help="configuration commands")

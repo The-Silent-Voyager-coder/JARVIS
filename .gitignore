@@ -49,12 +49,12 @@ config/*.local.yaml
 workspaces/
 !workspaces/.gitkeep
 
-# --- Legacy reference projects (previous Jarvis models, local only) ---
-legacy/
+# --- Past lives: previous assistant models, local only ---
+past-lives/
 
 # --- Shelved research + housed side projects (local only) ---
-reference/
-projects/
+tomes/
+creations/
 
 # --- Coverage / logs ---
 .coverage.*

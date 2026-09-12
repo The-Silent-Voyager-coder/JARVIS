@@ -21,11 +21,11 @@ from greatsage.intelligence.benchmark import (
 from greatsage.tools.models import BaseTool, ToolCategory, ToolContext, ToolResult, ToolRisk
 
 
-def _jarvis_version() -> str:
+def _sage_version() -> str:
     try:
         from importlib.metadata import PackageNotFoundError, version
 
-        return version("jarvis")
+        return version("great-sage")
     except PackageNotFoundError:  # pragma: no cover - editable installs expose it
         return "unknown"
 
@@ -77,14 +77,14 @@ class SystemInfoTool(BaseTool):
     output_schema = {
         "type": "object",
         "properties": {
-            "jarvis_version": {"type": "string"},
+            "sage_version": {"type": "string"},
             "platform": {"type": "object"},
             "cpu": {"type": "object"},
             "memory": {"type": "object"},
             "storage": {"type": "array"},
             "gpu": {"type": "array"},
         },
-        "required": ["jarvis_version", "platform", "cpu", "memory", "gpu"],
+        "required": ["sage_version", "platform", "cpu", "memory", "gpu"],
     }
 
     def execute(
@@ -96,7 +96,7 @@ class SystemInfoTool(BaseTool):
             tool_id=self.id,
             success=True,
             output={
-                "jarvis_version": _jarvis_version(),
+                "sage_version": _sage_version(),
                 "platform": collect_platform(),
                 "cpu": collect_cpu(),
                 "memory": collect_memory(),

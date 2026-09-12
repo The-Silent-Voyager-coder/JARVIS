@@ -21,7 +21,7 @@ def test_version(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exc:
         main(["--version"])
     assert exc.value.code == 0
-    assert "jarvis 0.3.0" in capsys.readouterr().out
+    assert "greatsage 0.3.0" in capsys.readouterr().out
 
 
 def test_config_validate_valid(valid_config_yaml: Path, capsys: pytest.CaptureFixture[str]) -> None:
