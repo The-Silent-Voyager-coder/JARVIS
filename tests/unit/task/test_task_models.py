@@ -2,8 +2,8 @@
 
 import pytest
 
-from jarvis.exceptions import TaskStateError, TaskValidationError
-from jarvis.task.models import TaskRecord, TaskState, transition_state
+from greatsage.exceptions import TaskStateError, TaskValidationError
+from greatsage.task.models import TaskRecord, TaskState, transition_state
 
 
 def test_task_state_transitions() -> None:

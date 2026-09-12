@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from jarvis.memory.working_memory import (
+from greatsage.memory.working_memory import (
     WORKING_DEFAULT_TTL_SECONDS,
     WorkingMemory,
     WorkingMemoryStore,
@@ -16,7 +16,7 @@ from jarvis.memory.working_memory import (
 @pytest.fixture
 def clock(monkeypatch: pytest.MonkeyPatch):
     """Frozen utcnow for deterministic TTL/expiry tests."""
-    import jarvis.memory.working_memory as module
+    import greatsage.memory.working_memory as module
 
     now = datetime(2026, 1, 1, 12, 0, 0)
     times = {"current": now}

@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.exceptions import ServiceError
-from jarvis.intelligence.mock import MockProvider
-from jarvis.intelligence.provider import ProviderState
-from jarvis.intelligence.registry import ProviderRegistry
+from greatsage.exceptions import ServiceError
+from greatsage.intelligence.mock import MockProvider
+from greatsage.intelligence.provider import ProviderState
+from greatsage.intelligence.registry import ProviderRegistry
 
 
 @pytest.fixture

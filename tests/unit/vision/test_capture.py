@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.exceptions import VisionValidationError
-from jarvis.vision.capture import (
+from greatsage.exceptions import VisionValidationError
+from greatsage.vision.capture import (
     CaptureManager,
     StubCaptureBackend,
     encode_bmp,
     parse_bmp_dimensions,
 )
-from jarvis.vision.limits import VisionLimits, default_limits
+from greatsage.vision.limits import VisionLimits, default_limits
 
 
 def test_stub_always_available() -> None:

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.cli import EXIT_FAILURE, EXIT_INVALID, EXIT_OK, main
+from greatsage.cli import EXIT_FAILURE, EXIT_INVALID, EXIT_OK, main
 
 
 def test_schedule_health(valid_config_yaml: Path, capsys: pytest.CaptureFixture[str]) -> None:

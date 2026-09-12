@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.exceptions import ToolValidationError
-from jarvis.tools.models import (
+from greatsage.exceptions import ToolValidationError
+from greatsage.tools.models import (
     ApprovalOutcome,
     ToolCategory,
     ToolDecision,

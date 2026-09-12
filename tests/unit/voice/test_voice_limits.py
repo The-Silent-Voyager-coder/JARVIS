@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from jarvis.voice.limits import (
+from greatsage.voice.limits import (
     MAX_AUDIO_BYTES_CEILING,
     MAX_TEXT_CHARS_CEILING,
     MAX_TURNS_PER_SESSION_CEILING,

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.exceptions import VoiceValidationError
-from jarvis.voice.models import (
+from greatsage.exceptions import VoiceValidationError
+from greatsage.voice.models import (
     SpeechResult,
     Transcript,
     VoiceBackend,

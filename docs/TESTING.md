@@ -52,12 +52,12 @@ ruff check .               # linter
 mypy jarvis                # type checker (dev extra)
 ```
 
-Target: ≥80% coverage on `jarvis/` modules; 100% on `security/` decision paths.
+Target: ≥80% coverage on `greatsage/` modules; 100% on `security/` decision paths.
 
 ## 6. Phase 1 baseline
 
 - 95 tests across `tests/unit/configuration|events|core|observability` and
-  `tests/integration/test_cli.py`; coverage 93% (`jarvis/`).
+  `tests/integration/test_cli.py`; coverage 93% (`greatsage/`).
 - Key behaviors proven by tests: config precedence + env override + provider
   repair-by-defaults; strict validation output; event ordering, filtering and
   subscriber-failure isolation; topological registry start/stop with rollback;

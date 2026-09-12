@@ -6,15 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.configuration.model import ToolSecurityMode
-from jarvis.tools.models import ToolCategory, ToolDecision, ToolRequest, ToolRisk
-from jarvis.tools.policy import (
+from greatsage.configuration.model import ToolSecurityMode
+from greatsage.tools.models import ToolCategory, ToolDecision, ToolRequest, ToolRisk
+from greatsage.tools.policy import (
     PathSecurityHook,
     SecurityPolicy,
     SensitiveArgumentHook,
     ShellCommandHook,
 )
-from jarvis.tools.shell_classifier import CommandClass
+from greatsage.tools.shell_classifier import CommandClass
 from tests.unit.tools.stub_tools import CriticalProbe, StubProbe
 
 
@@ -256,7 +256,7 @@ def test_hooks_only_tighten() -> None:
 
 
 def test_classifier_tables_are_disjoint() -> None:
-    from jarvis.tools import shell_classifier as sc
+    from greatsage.tools import shell_classifier as sc
 
     tables = [sc.FORBIDDEN_COMMANDS, sc.DANGEROUS_COMMANDS, sc.SAFE_COMMANDS,
               sc.RESTRICTED_COMMANDS, sc.SHELL_LAUNCHERS]

@@ -11,10 +11,10 @@ import asyncio
 
 import pytest
 
-from jarvis.exceptions import ProviderCapabilityError, ProviderError, ProviderUnavailableError
-from jarvis.intelligence.models import AIRequest, Message, ToolDefinition
-from jarvis.intelligence.ollama import OllamaProvider
-from jarvis.intelligence.provider import Capability, ProviderState
+from greatsage.exceptions import ProviderCapabilityError, ProviderError, ProviderUnavailableError
+from greatsage.intelligence.models import AIRequest, Message, ToolDefinition
+from greatsage.intelligence.ollama import OllamaProvider
+from greatsage.intelligence.provider import Capability, ProviderState
 
 OLLAMA_TAGS = {
     "models": [

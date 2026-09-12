@@ -5,9 +5,9 @@ from __future__ import annotations
 import threading
 import time
 
-from jarvis.agent.approval import AgentApprovalProvider
-from jarvis.agent.cancellation import CancellationToken
-from jarvis.tools.models import ApprovalOutcome, ToolRequest
+from greatsage.agent.approval import AgentApprovalProvider
+from greatsage.agent.cancellation import CancellationToken
+from greatsage.tools.models import ApprovalOutcome, ToolRequest
 
 
 def _request(request_id: str = "r1") -> ToolRequest:

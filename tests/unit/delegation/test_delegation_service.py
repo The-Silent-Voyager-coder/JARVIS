@@ -12,22 +12,22 @@ from typing import Any
 
 import pytest
 
-from jarvis.configuration.loader import load_config
-from jarvis.core.health import HealthRegistry, HealthStatus
-from jarvis.delegation.models import (
+from greatsage.configuration.loader import load_config
+from greatsage.core.health import HealthRegistry, HealthStatus
+from greatsage.delegation.models import (
     DelegationEvent,
     DelegationEventKind,
     DelegationRequest,
     DelegationState,
 )
-from jarvis.delegation.service import DelegationService
-from jarvis.exceptions import (
+from greatsage.delegation.service import DelegationService
+from greatsage.exceptions import (
     DelegationUnavailableError,
     DelegationValidationError,
 )
-from jarvis.intelligence.registry import ProviderRegistry
-from jarvis.tools.approval import DeterministicApprovalProvider
-from jarvis.tools.models import ApprovalOutcome
+from greatsage.intelligence.registry import ProviderRegistry
+from greatsage.tools.approval import DeterministicApprovalProvider
+from greatsage.tools.models import ApprovalOutcome
 from tests.unit.delegation.test_delegation_manager import (
     FakeDelegationProvider,
     approved_wd,

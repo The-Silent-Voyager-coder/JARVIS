@@ -73,13 +73,13 @@ configurable criteria: task class (coding vs reasoning vs quick reply),
 provider health, availability, resource budget. Routes are config-driven
 (`config/jarvis.example.yaml → ai`), never hard-coded in core.
 
-### Phase 2 implementation (`jarvis/intelligence/`)
+### Phase 2 implementation (`greatsage/intelligence/`)
 
 The Phase 0 sketch became an executable provider layer. The core-facing
 surface differs in names but preserves every semantic:
 
 ```python
-# jarvis/intelligence/models.py
+# greatsage/intelligence/models.py
 class AIRequest:            # was GenerationRequest
     request_id: str
     messages: list[Message] # role: system|user|assistant|tool; content is
@@ -106,7 +106,7 @@ class StreamChunk:          # provider-neutral streaming unit
     kind: "text" | "tool_call" | "metadata" | "completion" | "error"
 ```
 
-- `AIProvider` (abstract base in `jarvis/intelligence/provider.py`) exposes
+- `AIProvider` (abstract base in `greatsage/intelligence/provider.py`) exposes
   `provider_id()`, `capabilities()`, `health()`, `init()`/`stop()`,
   `generate(request)` (async), `stream(request)` (async generator), and
   `cancel(request_id)`. `stream()` is gated on the STREAMING capability and
@@ -117,7 +117,7 @@ class StreamChunk:          # provider-neutral streaming unit
   CODE_EXECUTION. Providers advertise only what they actually support.
 - Requests validate on construction (empty messages, tool messages without
   `tool_call_id`, temperature/max_tokens/timeout ranges).
-- Mock provider (`jarvis/intelligence/mock.py`): deterministic responses,
+- Mock provider (`greatsage/intelligence/mock.py`): deterministic responses,
   streaming, configurable latency/failure, born READY — the test workhorse
   and fail-safe default.
 - Adapters (`ollama.py`, `opencode.py`) talk HTTP via stdlib `urllib`; the
@@ -230,7 +230,7 @@ class ServiceRegistry(Protocol):
 
 Startup order is derived from the dependency graph; shutdown is reverse order.
 
-### Phase 1 implementation (`jarvis/core/registry.py`)
+### Phase 1 implementation (`greatsage/core/registry.py`)
 
 `ServiceRegistry` matches the contract with one deviation: services are
 registered with **positional dependencies** (`register(name, service,
@@ -253,7 +253,7 @@ class Config(Protocol):
 Validated on load against the documented schema (`docs/CONFIGURATION.md`).
 Invalid config = refused startup, never silent fallback.
 
-### Phase 1 implementation (`jarvis/configuration/`)
+### Phase 1 implementation (`greatsage/configuration/`)
 
 The Phase 0 dotted-get surface became executable as typed records instead:
 
@@ -279,7 +279,7 @@ load_config(config_path: str | Path | None = None,
 - Invalid configuration raises `ConfigurationError`; the CLI never starts the
   runtime on invalid config and never logs secret values.
 
-The Phase 1/2 CLI surface (`jarvis` console script, `jarvis/cli.py`):
+The Phase 1/2 CLI surface (`jarvis` console script, `greatsage/cli.py`):
 
 ```text
 jarvis --version                     → "jarvis 0.3.0", exit 0
@@ -332,7 +332,7 @@ elsewhere or report, never hang indefinitely.
 
 ### Phase 2 implementation
 
-`jarvis/intelligence/provider.py` implements exactly this shape as
+`greatsage/intelligence/provider.py` implements exactly this shape as
 `ProviderHealth` (`provider_id`, `ok`, `latency_ms`, `model_loaded`,
 `detail`, `last_check`) plus a `to_dict()` for CLI/JSON output. `health()`
 never raises: unreachable providers return `ok=False` with a detail string,
@@ -342,7 +342,7 @@ provider is healthy, UNHEALTHY when none are.
 
 ## 9. Memory Interfaces (Phase 3)
 
-Implemented in `jarvis/memory/`; the service depends on the repository
+Implemented in `greatsage/memory/`; the service depends on the repository
 abstraction, never on SQL.
 
 ```python
@@ -383,7 +383,7 @@ class MemoryFilter:
 ```
 
 ```python
-class MemoryRepository(ABC):            # jarvis/memory/repository.py
+class MemoryRepository(ABC):            # greatsage/memory/repository.py
     def initialize(self) -> None: ...   # create/migrate schema
     def create(self, memory: Memory) -> None: ...
     def get(self, memory_id, *, include_expired=False,
@@ -404,7 +404,7 @@ class MemoryRepository(ABC):            # jarvis/memory/repository.py
 (+ `to_dict()`).
 
 ```python
-class MemoryService:                     # jarvis/memory/service.py
+class MemoryService:                     # greatsage/memory/service.py
     availability: str                    # "healthy" | "disabled" | "unavailable"
 
     def remember(self, content, *, memory_type=LONG_TERM, source="",
@@ -443,7 +443,7 @@ session's store; sessions never share items.
 
 ## 10. Tool System Interfaces (Phase 4)
 
-Implemented in `jarvis/tools/`; every execution — AI or CLI — goes through
+Implemented in `greatsage/tools/`; every execution — AI or CLI — goes through
 `ToolService.execute` (no bypass). Full contract: `docs/TOOLS.md`.
 
 ```python
@@ -494,19 +494,19 @@ class BaseTool:
 ```
 
 ```python
-class ToolRegistry:                     # jarvis/tools/registry.py
+class ToolRegistry:                     # greatsage/tools/registry.py
     def register(self, tool: BaseTool) -> None: ...   # dup/id/schema rejected
     def get(self, tool_id: str) -> BaseTool: ...      # ToolNotFoundError
     def list_ids(self) -> tuple[str, ...]: ...
     def describe(self, tool_id: str) -> dict: ...     # full declaration
     def health(self) -> dict: ...                     # status/tool_count/tools
 
-class SecurityPolicy:                   # jarvis/tools/policy.py
+class SecurityPolicy:                   # greatsage/tools/policy.py
     @classmethod
     def from_config(cls, config: JarvisConfig) -> SecurityPolicy: ...
     def evaluate(self, request, tool) -> tuple[ToolDecision, str]: ...
 
-class ToolService:                      # jarvis/tools/service.py
+class ToolService:                      # greatsage/tools/service.py
     availability: str                   # "healthy" | "disabled" | "unavailable"
     approval: ApprovalProvider | None   # public; install to answer ASK
     publisher: Any                      # callable(Event); wired by the runtime
@@ -516,7 +516,7 @@ class ToolService:                      # jarvis/tools/service.py
     def health(self) -> dict: ...
     def register_health_check(self, health_registry: HealthRegistry) -> None: ...
 
-class ApprovalProvider(ABC):            # jarvis/tools/approval.py
+class ApprovalProvider(ABC):            # greatsage/tools/approval.py
     def request_approval(self, request: ToolRequest, tool: BaseTool,
                          reason: str) -> ApprovalOutcome: ...
 ```
@@ -534,7 +534,7 @@ Orchestrator = control flow**. Interface contracts below; see
 docs/AGENTS.md for the operating rules.
 
 ```python
-# jarvis/agent/models.py (provider-neutral; never OpenCode-specific)
+# greatsage/agent/models.py (provider-neutral; never OpenCode-specific)
 
 class AgentState(str, Enum):
     PENDING = "pending"
@@ -581,7 +581,7 @@ class AgentResult:
 ```
 
 ```python
-class AgentLimits:          # jarvis/agent/limits.py (frozen dataclass)
+class AgentLimits:          # greatsage/agent/limits.py (frozen dataclass)
     max_steps: int
     max_tool_calls: int
     max_wall_time_seconds: float
@@ -589,13 +589,13 @@ class AgentLimits:          # jarvis/agent/limits.py (frozen dataclass)
     max_total_tool_output_bytes: int
     loop_detection_threshold: int
 
-class AgentOrchestrator:    # jarvis/agent/orchestrator.py
+class AgentOrchestrator:    # greatsage/agent/orchestrator.py
     def run(self, task: AgentTask, *, limits: AgentLimits,
             tools: ToolService, intelligence: IntelligenceService,
             memory: MemoryService | None, cancel_token: CancellationToken,
             publisher: Callable[[Event], None]) -> AgentResult: ...
 
-class AgentService:         # jarvis/agent/service.py
+class AgentService:         # greatsage/agent/service.py
     availability: str       # "healthy" | "disabled" | "unavailable"
     def start(self, config: JarvisConfig) -> None: ...
     def run(self, prompt: str, *, session_id: str | None = None,
@@ -605,7 +605,7 @@ class AgentService:         # jarvis/agent/service.py
     def health(self) -> dict: ...   # available/status/enabled/detail/current
     def register_health_check(self, health_registry) -> None: ...
 
-class AgentApprovalProvider:   # jarvis/agent/approval.py
+class AgentApprovalProvider:   # greatsage/agent/approval.py
     def approve_all(self) -> None: ...
     def disapprove_all(self) -> None: ...
     def is_open(self) -> bool: ...
@@ -648,20 +648,20 @@ tasks execute plan steps exclusively through the Phase 4 tool pipeline
 (same allow/ask/deny + audit semantics as `tools execute`).
 
 ```python
-class WorkspaceService:   # jarvis/workspace/service.py
+class WorkspaceService:   # greatsage/workspace/service.py
     def scan(self, root: str | None = None) -> dict: ...
     def info(self, workspace_id: str | None = None,
              root: str | None = None) -> dict | None: ...
     def health(self) -> dict: ...   # available/status/enabled/detail
 
-class PlanningService:    # jarvis/planning/service.py
+class PlanningService:    # greatsage/planning/service.py
     def create_plan(self, goal: str, workspace: Any = None,
                     plan_id: str | None = None) -> dict: ...
     def get(self, plan_id: str) -> dict | None: ...
     def list(self) -> list[dict]: ...
     def health(self) -> dict: ...   # available/status/enabled/detail
 
-class TaskService:        # jarvis/task/service.py
+class TaskService:        # greatsage/task/service.py
     def run(self, plan: str) -> TaskReport: ...     # plan file (.yaml/.json) or plan_id
     def resume(self, task_id: str) -> TaskReport: ...
     def list(self, limit: int = 50) -> list[dict]: ...
@@ -701,7 +701,7 @@ subsystem, or non-completed task state; `2` invalid input/configuration
   config-independent (see merge-risk notes in the Phase 6–10 QA report).
 - Phase 6 voice pipeline CLI is merged (`jarvis voice health|listen|speak`).
 - Phase 7 (autonomy: planner + task-graph + verification on top of
-  `jarvis/planning` + `jarvis/task`) and Phase 9 (security hardening)
-  are implemented (`jarvis/planning/graph.py` + `verify.py`,
-  `jarvis/tools/redaction.py` + policy tightening — see `docs/AUTONOMY.md`
+  `greatsage/planning` + `greatsage/task`) and Phase 9 (security hardening)
+  are implemented (`greatsage/planning/graph.py` + `verify.py`,
+  `greatsage/tools/redaction.py` + policy tightening — see `docs/AUTONOMY.md`
   and `docs/SECURITY_MODEL.md` §10).

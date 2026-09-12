@@ -6,8 +6,8 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from jarvis.exceptions import MemoryValidationError
-from jarvis.memory.models import (
+from greatsage.exceptions import MemoryValidationError
+from greatsage.memory.models import (
     Memory,
     MemoryFilter,
     MemoryRetrieval,

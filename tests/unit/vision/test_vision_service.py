@@ -7,11 +7,11 @@ from typing import Any
 
 import pytest
 
-from jarvis.configuration.loader import load_config
-from jarvis.events.models import VISION_CAPTURED, VISION_DESCRIBED
-from jarvis.exceptions import VisionUnavailableError, VisionValidationError
-from jarvis.vision.limits import VisionLimits
-from jarvis.vision.service import VisionService
+from greatsage.configuration.loader import load_config
+from greatsage.events.models import VISION_CAPTURED, VISION_DESCRIBED
+from greatsage.exceptions import VisionUnavailableError, VisionValidationError
+from greatsage.vision.limits import VisionLimits
+from greatsage.vision.service import VisionService
 
 
 def write_config(tmp_path: Path) -> Path:
@@ -116,7 +116,7 @@ def test_describe_stub(tmp_path: Path) -> None:
 
 def test_describe_unknown_id(tmp_path: Path) -> None:
     service = make_service(tmp_path)
-    from jarvis.vision.models import new_capture_id
+    from greatsage.vision.models import new_capture_id
 
     with pytest.raises(VisionValidationError):
         service.describe(new_capture_id())

@@ -5,15 +5,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from jarvis.configuration.loader import load_config
-from jarvis.planning.models import Plan, Step
-from jarvis.task.cancellation import CancellationToken
-from jarvis.task.executor import TaskExecutor
-from jarvis.task.models import TaskRecord, TaskState
-from jarvis.task.sqlite_repository import SqliteTaskRepository
-from jarvis.tools.approval import DeterministicApprovalProvider
-from jarvis.tools.models import ApprovalOutcome
-from jarvis.tools.service import ToolService
+from greatsage.configuration.loader import load_config
+from greatsage.planning.models import Plan, Step
+from greatsage.task.cancellation import CancellationToken
+from greatsage.task.executor import TaskExecutor
+from greatsage.task.models import TaskRecord, TaskState
+from greatsage.task.sqlite_repository import SqliteTaskRepository
+from greatsage.tools.approval import DeterministicApprovalProvider
+from greatsage.tools.models import ApprovalOutcome
+from greatsage.tools.service import ToolService
 
 
 def make_config(tmp_path: Path) -> object:
@@ -205,7 +205,7 @@ def test_executor_cancellation_mid_plan(tmp_path: Path) -> None:
     token = CancellationToken()
     # Cancel before execution (simulate mid-plan)
     token.cancel()
-    from jarvis.exceptions import TaskCancelledError
+    from greatsage.exceptions import TaskCancelledError
 
     try:
         executor.execute(plan, task, cancellation=token)
@@ -240,7 +240,7 @@ def test_executor_timeout(tmp_path: Path) -> None:
     task = TaskRecord(id="t6", plan_id=plan.id, goal=plan.goal, state=TaskState.PENDING, total_steps=3)
     repo.create_task(task)
     # Use 0.001 total timeout to force timeout
-    from jarvis.exceptions import TaskTimeoutError
+    from greatsage.exceptions import TaskTimeoutError
 
     try:
         executor.execute(plan, task, total_timeout=0.0)

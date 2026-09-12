@@ -5,22 +5,22 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-from jarvis.configuration.loader import load_config
-from jarvis.configuration.model import ToolSecurityMode
-from jarvis.exceptions import ToolPermissionDeniedError
-from jarvis.tools.approval import DeterministicApprovalProvider
-from jarvis.tools.models import (
+from greatsage.configuration.loader import load_config
+from greatsage.configuration.model import ToolSecurityMode
+from greatsage.exceptions import ToolPermissionDeniedError
+from greatsage.tools.approval import DeterministicApprovalProvider
+from greatsage.tools.models import (
     ApprovalOutcome,
     ToolContext,
     ToolDecision,
     ToolRequest,
     ToolRisk,
 )
-from jarvis.tools.policy import SecurityPolicy
-from jarvis.tools.registry import ToolRegistry
-from jarvis.tools.service import ToolService
-from jarvis.vision.capture import encode_bmp
-from jarvis.vision.tools import (
+from greatsage.tools.policy import SecurityPolicy
+from greatsage.tools.registry import ToolRegistry
+from greatsage.tools.service import ToolService
+from greatsage.vision.capture import encode_bmp
+from greatsage.vision.tools import (
     VisionCaptureTool,
     VisionDescribeTool,
     register_vision_tools,
@@ -107,7 +107,7 @@ def test_capture_tool_metadata_only(tmp_path: Path) -> None:
 
 
 def test_capture_tool_rejects_oversize() -> None:
-    from jarvis.vision.limits import VisionLimits
+    from greatsage.vision.limits import VisionLimits
 
     tool = VisionCaptureTool(limits=VisionLimits(max_width=8, max_height=8))
     result = tool.execute({"width": 64, "height": 64}, make_context(Path(".")))

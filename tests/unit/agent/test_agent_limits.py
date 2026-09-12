@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.agent.limits import (
+from greatsage.agent.limits import (
     AGENT_APPROVAL_WAIT_SECONDS_CEILING,
     AGENT_APPROVAL_WAIT_SECONDS_DEFAULT,
     LOOP_DETECTION_THRESHOLD_CEILING,
@@ -21,8 +21,8 @@ from jarvis.agent.limits import (
     MAX_WALL_TIME_SECONDS_DEFAULT,
     check_bounded,
 )
-from jarvis.agent.models import AgentLimits
-from jarvis.exceptions import AgentValidationError
+from greatsage.agent.models import AgentLimits
+from greatsage.exceptions import AgentValidationError
 
 
 def test_defaults_are_bounded() -> None:

@@ -1,6 +1,6 @@
 # Tool System (Phase 4 implementation)
 
-> Status: **implemented** (`jarvis/tools`, Phase 4). This documents the actual
+> Status: **implemented** (`greatsage/tools`, Phase 4). This documents the actual
 > implementation: the security pipeline, registry, policy, built-in tools, and
 > CLI. The Phase 0 tool contract lives in `docs/INTERFACES.md` §4; this file
 > describes what shipped.
@@ -22,12 +22,12 @@ AI → ToolRequest → ToolRegistry → SecurityPolicy → Permission Decision
   the request is denied.
 - Every attempt is published as an event, including denials (spec §32-33).
 
-`ToolService` (`jarvis/tools/service.py`) owns the registry, policy, approval
+`ToolService` (`greatsage/tools/service.py`) owns the registry, policy, approval
 provider, and event publisher. The CLI `tools execute` command drives this
 exact service — executing a tool through the CLI and through an agent is the
 same code path.
 
-## 2. Core Models (`jarvis/tools/models.py`)
+## 2. Core Models (`greatsage/tools/models.py`)
 
 | Type | Purpose |
 |---|---|
@@ -44,7 +44,7 @@ same code path.
 (object/string/integer/number/boolean/array, required, min/max lengths and
 bounds). Invalid arguments raise `ToolValidationError`.
 
-## 3. Registry (`jarvis/tools/registry.py`)
+## 3. Registry (`greatsage/tools/registry.py`)
 
 - `register(tool)` rejects duplicate ids (`ServiceError`) and invalid
   `input_schema`/`output_schema` (`ToolValidationError`).
@@ -54,10 +54,10 @@ bounds). Invalid arguments raise `ToolValidationError`.
   capabilities, input_schema, output_schema).
 - `health()` reports `{"status", "tool_count", "tools"}`.
 
-`register_default_tools()` (`jarvis/tools/defaults.py`) registers the Phase 4
+`register_default_tools()` (`greatsage/tools/defaults.py`) registers the Phase 4
 foundational set (see §8).
 
-## 4. Policy and Modes (`jarvis/tools/policy.py`)
+## 4. Policy and Modes (`greatsage/tools/policy.py`)
 
 `SecurityPolicy.from_config(config)` builds the policy from
 `security.mode`, `tools.allowed_roots`, `tools.denied_roots`, and the
@@ -94,7 +94,7 @@ Rules:
 
 ### Hooks (they only tighten, never loosen)
 
-- **PathSecurityHook** (`jarvis/tools/pathsecurity.py`): canonicalizes every
+- **PathSecurityHook** (`greatsage/tools/pathsecurity.py`): canonicalizes every
   declared path argument (absolute/relative/`~` expansion), denies paths
   outside `allowed_roots` or inside `denied_roots`, and denies access to
   protected files on **every** declared path argument (including
@@ -103,7 +103,7 @@ Rules:
   path whose stem is `secret`/`token`/`credential`/`api_key`/`password`/
   `private_key`. Committed templates (`.env.example`, `.env.sample`,
   `.env.template`) stay readable. Directories are never treated as protected.
-- **ShellCommandHook** (`jarvis/tools/shell_classifier.py`): classifies the
+- **ShellCommandHook** (`greatsage/tools/shell_classifier.py`): classifies the
   first token of a `shell.execute` command — `safe` / `restricted` /
   `dangerous` / `forbidden` — case- and `.exe`-insensitive. `safe` commands
   keep the risk, `restricted` escalate to `medium`, `dangerous` escalate to
@@ -118,11 +118,11 @@ Rules:
   credentials (`.env`-style markers, `api_key`, `password`, `token`, …) and —
   Phase 9 — `env` mapping entries with secret-shaped keys *or*
   high-confidence secret-format values, plus `command` argv items matching a
-  secret format (`jarvis/tools/redaction.py`). Ordinary prose is never denied;
+  secret format (`greatsage/tools/redaction.py`). Ordinary prose is never denied;
   only `sk-…`, `ghp_…`/`github_pat_…`, `xox…`, `AKIA…`, PEM private-key
   blocks, and JWT-shaped values trigger.
 
-## 5. Environment and Execution Bounds (`jarvis/tools/environment.py`)
+## 5. Environment and Execution Bounds (`greatsage/tools/environment.py`)
 
 - `scrub_environment(environ)` removes J.A.R.V.I.S. secret variables
   (`JARVIS_*_KEY`, `*_TOKEN`, `*_SECRET`, `*_PASSWORD`, `.env` markers) from
@@ -140,7 +140,7 @@ Rules:
 - `system.info` output is serialized through the env scrubber before it can
   leak environment values.
 
-## 6. Approvals (`jarvis/tools/approval.py`)
+## 6. Approvals (`greatsage/tools/approval.py`)
 
 `ApprovalProvider` is an abstract base: `request_approval(request, tool,
 reason) -> ApprovalOutcome`. The CLI installs a provider that grants approval
@@ -253,7 +253,7 @@ inside a tool becomes a failed result with `error`, never a crashed process.
 
 The AI tool-calling loop (model chooses tools from `AIRequest.tools`) shipped
 as Phase 5A (`docs/AGENTS.md`) and OpenCode delegation of tool calls shipped
-as Phase 5B (`jarvis/delegation/`). Network tools (`network.fetch`,
+as Phase 5B (`greatsage/delegation/`). Network tools (`network.fetch`,
 `homeassistant.*`) and GUI tools (`gui.*`) shipped as roadmap additions
 (§7b); the `browser` category remains reserved. Deleting files and killing
 processes are intentionally impossible through the tool system.

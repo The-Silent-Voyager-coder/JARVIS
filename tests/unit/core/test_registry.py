@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.core.registry import ServiceRegistry
-from jarvis.exceptions import ServiceError
+from greatsage.core.registry import ServiceRegistry
+from greatsage.exceptions import ServiceError
 
 
 class StartStopService:

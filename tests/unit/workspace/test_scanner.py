@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.configuration.loader import load_config
-from jarvis.core.health import HealthRegistry, HealthStatus
-from jarvis.exceptions import WorkspaceValidationError
-from jarvis.workspace.models import ProjectType
-from jarvis.workspace.scanner import WorkspaceScanner
-from jarvis.workspace.service import WorkspaceService
+from greatsage.configuration.loader import load_config
+from greatsage.core.health import HealthRegistry, HealthStatus
+from greatsage.exceptions import WorkspaceValidationError
+from greatsage.workspace.models import ProjectType
+from greatsage.workspace.scanner import WorkspaceScanner
+from greatsage.workspace.service import WorkspaceService
 
 
 def write_config(tmp_path: Path, **overrides: object) -> Path:

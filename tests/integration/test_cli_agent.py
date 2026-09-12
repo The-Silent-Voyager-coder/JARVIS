@@ -13,9 +13,9 @@ from pathlib import Path
 
 import pytest
 
-import jarvis.cli as cli_module
-from jarvis.cli import EXIT_FAILURE, EXIT_INVALID, EXIT_OK, main
-from jarvis.core.runtime import Runtime
+import greatsage.cli as cli_module
+from greatsage.cli import EXIT_FAILURE, EXIT_INVALID, EXIT_OK, main
+from greatsage.core.runtime import Runtime
 
 
 def write_agent_config(tmp_path: Path) -> Path:

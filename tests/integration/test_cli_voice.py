@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.cli import EXIT_INVALID, EXIT_OK, main
+from greatsage.cli import EXIT_INVALID, EXIT_OK, main
 
 
 def write_config(tmp_path: Path) -> Path:
@@ -88,7 +88,7 @@ def test_voice_listen_requires_input(tmp_path: Path, capsys: pytest.CaptureFixtu
 
 
 def test_voice_listen_audio(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from jarvis.voice.tts import encode_wav
+    from greatsage.voice.tts import encode_wav
 
     config = write_config(tmp_path)
     audio, _ = encode_wav("hi")

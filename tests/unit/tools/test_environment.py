@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.exceptions import ToolValidationError
-from jarvis.tools.environment import (
+from greatsage.exceptions import ToolValidationError
+from greatsage.tools.environment import (
     is_secret_name,
     merge_environment,
     scrub_environment,

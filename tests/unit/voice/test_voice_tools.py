@@ -5,28 +5,28 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-from jarvis.configuration.loader import load_config
-from jarvis.configuration.model import ToolSecurityMode
-from jarvis.exceptions import ToolPermissionDeniedError
-from jarvis.tools.approval import DeterministicApprovalProvider
-from jarvis.tools.models import (
+from greatsage.configuration.loader import load_config
+from greatsage.configuration.model import ToolSecurityMode
+from greatsage.exceptions import ToolPermissionDeniedError
+from greatsage.tools.approval import DeterministicApprovalProvider
+from greatsage.tools.models import (
     ApprovalOutcome,
     ToolContext,
     ToolDecision,
     ToolRequest,
     ToolRisk,
 )
-from jarvis.tools.policy import SecurityPolicy
-from jarvis.tools.registry import ToolRegistry
-from jarvis.tools.service import ToolService
-from jarvis.voice.limits import VoiceLimits
-from jarvis.voice.tools import (
+from greatsage.tools.policy import SecurityPolicy
+from greatsage.tools.registry import ToolRegistry
+from greatsage.tools.service import ToolService
+from greatsage.voice.limits import VoiceLimits
+from greatsage.voice.tools import (
     VoiceListenTool,
     VoiceSpeakTool,
     VoiceWakeTool,
     register_voice_tools,
 )
-from jarvis.voice.tts import encode_wav
+from greatsage.voice.tts import encode_wav
 
 
 def write_config(tmp_path: Path) -> Path:

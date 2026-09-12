@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.exceptions import PlanningValidationError
-from jarvis.planning.planner import Planner
-from jarvis.workspace.models import EntryPoint, ProjectType, StructureSummary, WorkspaceInfo
+from greatsage.exceptions import PlanningValidationError
+from greatsage.planning.planner import Planner
+from greatsage.workspace.models import EntryPoint, ProjectType, StructureSummary, WorkspaceInfo
 
 
 def make_workspace(root: Path, ptype: ProjectType = ProjectType.PYTHON) -> WorkspaceInfo:

@@ -109,7 +109,7 @@ Audit writes are synchronous and cannot be disabled by agents.
 
 ## 9. Tool System Security (implemented Phase 4)
 
-The Phase 4 tool layer (`jarvis/tools/`) turns the design above into the
+The Phase 4 tool layer (`greatsage/tools/`) turns the design above into the
 enforcement layer every tool execution passes through. Full contract:
 `docs/TOOLS.md`.
 
@@ -152,7 +152,7 @@ enforcement layer every tool execution passes through. Full contract:
 
 Without changing the §2 risk vocabulary or the allow/ask/deny matrix:
 
-- **Secrets scrubbing.** `jarvis/tools/redaction.py` masks high-confidence
+- **Secrets scrubbing.** `greatsage/tools/redaction.py` masks high-confidence
   secret formats (`sk-…`, `ghp_…`/`github_pat_…`, `xox…`, `AKIA…`, PEM
   private-key blocks, JWT-shaped tokens) in every free-text audit field:
   tool errors (service `_publish` + returned `ToolResult.error`), delegation

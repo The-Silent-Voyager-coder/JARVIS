@@ -14,11 +14,11 @@ import asyncio
 
 import pytest
 
-from jarvis.delegation.models import DelegationEventKind
-from jarvis.exceptions import ProviderCapabilityError, ProviderError, ProviderUnavailableError
-from jarvis.intelligence.models import AIRequest, Message, ToolDefinition
-from jarvis.intelligence.opencode import OpenCodeProvider
-from jarvis.intelligence.provider import Capability, ProviderState
+from greatsage.delegation.models import DelegationEventKind
+from greatsage.exceptions import ProviderCapabilityError, ProviderError, ProviderUnavailableError
+from greatsage.intelligence.models import AIRequest, Message, ToolDefinition
+from greatsage.intelligence.opencode import OpenCodeProvider
+from greatsage.intelligence.provider import Capability, ProviderState
 
 OPENCODE_HEALTH = {"ok": True, "service": "opencode", "version": "0.1.0"}
 OPENCODE_SPEC = {"openapi": "3.1.0", "info": {"title": "opencode server"}}
@@ -196,7 +196,7 @@ def test_default_model_fallback(fake_server) -> None:
 
 
 def test_split_model_shapes() -> None:
-    from jarvis.intelligence.opencode import OpenCodeProvider as P
+    from greatsage.intelligence.opencode import OpenCodeProvider as P
 
     assert P._split_model(None) == (None, None)
     assert P._split_model("") == (None, None)

@@ -19,7 +19,7 @@ opencode serve [--port 4096] [--hostname 127.0.0.1] [--cors <origin>]
 | Events | `GET /event` — SSE stream (first event `server.connected`, then bus events); `GET /global/event` for global stream |
 | Auth (optional) | HTTP Basic via `OPENCODE_SERVER_PASSWORD` (+ `OPENCODE_SERVER_USERNAME`, default `opencode`) — supported by the client, passed via env |
 
-## 2. Client Architecture (`jarvis/integration/opencode/`)
+## 2. Client Architecture (`greatsage/integration/opencode/`)
 
 ```text
 OpenCodeClient
@@ -138,7 +138,7 @@ is reference-only. Enable only zero-cost local servers (e.g.
 services (firecrawl, exa, vercel, …) stay disabled unless the operator
 explicitly opts in with env-provided keys — never committed.
 
-## 8. Phase 2 Implementation (`jarvis/intelligence/opencode.py`)
+## 8. Phase 2 Implementation (`greatsage/intelligence/opencode.py`)
 
 Phase 2 lands the **provider connection** only — no delegation workflow, no
 permission response, no agent loop:
@@ -155,10 +155,10 @@ permission response, no agent loop:
   auth from `api_key_env` (read from the environment once, never from source).
 - What Phase 5B added on top: SSE `/event` streaming, tool/authority
   delegation with permission decisions from the JARVIS
-  security layer (`jarvis/delegation/` — manager, secure permission routing,
+  security layer (`greatsage/delegation/` — manager, secure permission routing,
   bounded SSE, `DELEGATION_*` audit events), task handoff and diff review —
   all gated behind the capabilities the provider advertises.
 - Deferred pieces (§2–§5 of this doc) remain design contracts where noted;
   the adapter stays deliberately narrower than the eventual client so nothing
-  depends on unverified endpoints. `jarvis/integration/` is reserved (empty)
-  — the OpenCode wire lives in `jarvis/intelligence/opencode.py`.
+  depends on unverified endpoints. `greatsage/integration/` is reserved (empty)
+  — the OpenCode wire lives in `greatsage/intelligence/opencode.py`.

@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.configuration.loader import load_config
-from jarvis.configuration.model import SecurityMode
-from jarvis.exceptions import ConfigurationError
+from greatsage.configuration.loader import load_config
+from greatsage.configuration.model import SecurityMode
+from greatsage.exceptions import ConfigurationError
 
 
 def test_defaults_load_without_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -17,7 +17,7 @@ def test_defaults_load_without_file(monkeypatch: pytest.MonkeyPatch, tmp_path: P
     # Hermetic against an operator-owned config/jarvis.yaml (documented setup
     # step): point the repo-root probe at a path that cannot exist.
     monkeypatch.setattr(
-        "jarvis.configuration.loader.DEFAULT_CONFIG_PATH",
+        "greatsage.configuration.loader.DEFAULT_CONFIG_PATH",
         tmp_path / "absent.yaml",
     )
     loaded = load_config()

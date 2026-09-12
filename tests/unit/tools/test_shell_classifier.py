@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.tools.shell_classifier import CommandClass, classify_command
+from greatsage.tools.shell_classifier import CommandClass, classify_command
 
 
 @pytest.mark.parametrize(

@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.exceptions import PlanningValidationError
-from jarvis.planning import graph as task_graph
-from jarvis.planning.models import Plan, PlanStatus, Step
+from greatsage.exceptions import PlanningValidationError
+from greatsage.planning import graph as task_graph
+from greatsage.planning.models import Plan, PlanStatus, Step
 
 
 def lin(*tool_ids: str) -> list[Step]:

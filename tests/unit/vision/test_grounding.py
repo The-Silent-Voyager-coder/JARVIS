@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from jarvis.vision.grounding import STUB_MARKER, GroundingStub
-from jarvis.vision.limits import VisionLimits, default_limits
-from jarvis.vision.models import new_capture_id
+from greatsage.vision.grounding import STUB_MARKER, GroundingStub
+from greatsage.vision.limits import VisionLimits, default_limits
+from greatsage.vision.models import new_capture_id
 
 
 def test_stub_summary_marked() -> None:

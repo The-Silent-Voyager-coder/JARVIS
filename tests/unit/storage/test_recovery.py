@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-import jarvis.storage.recovery as recovery
-from jarvis.storage.recovery import quarantine_corrupt_file
+import greatsage.storage.recovery as recovery
+from greatsage.storage.recovery import quarantine_corrupt_file
 
 
 def test_quarantine_copies_and_keeps_original(tmp_path: Path) -> None:

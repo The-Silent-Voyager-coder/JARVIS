@@ -18,18 +18,18 @@ from typing import Any
 
 import pytest
 
-from jarvis.configuration.loader import load_config
-from jarvis.delegation.limits import (
+from greatsage.configuration.loader import load_config
+from greatsage.delegation.limits import (
     MAX_DELEGATION_DEPTH_DEFAULT,
 )
-from jarvis.delegation.manager import DelegationManager, DelegationProvider
-from jarvis.delegation.models import (
+from greatsage.delegation.manager import DelegationManager, DelegationProvider
+from greatsage.delegation.models import (
     DelegationEvent,
     DelegationEventKind,
     DelegationRequest,
     DelegationState,
 )
-from jarvis.events.models import (
+from greatsage.events.models import (
     DELEGATION_COMPLETED,
     DELEGATION_FAILED,
     DELEGATION_PERMISSION_REQUESTED,
@@ -43,23 +43,23 @@ from jarvis.events.models import (
     TOOL_REJECTED,
     Event,
 )
-from jarvis.exceptions import (
+from greatsage.exceptions import (
     DelegationValidationError,
     ProviderCapabilityError,
     ProviderError,
     ProviderUnavailableError,
 )
-from jarvis.intelligence.models import AIRequest, AIResponse
-from jarvis.intelligence.provider import (
+from greatsage.intelligence.models import AIRequest, AIResponse
+from greatsage.intelligence.provider import (
     AIProvider,
     Capability,
     ProviderCapabilities,
     ProviderHealth,
     ProviderState,
 )
-from jarvis.intelligence.registry import ProviderRegistry
-from jarvis.tools.approval import DeterministicApprovalProvider
-from jarvis.tools.models import ApprovalOutcome
+from greatsage.intelligence.registry import ProviderRegistry
+from greatsage.tools.approval import DeterministicApprovalProvider
+from greatsage.tools.models import ApprovalOutcome
 
 
 class FakeDelegationProvider(AIProvider, DelegationProvider):

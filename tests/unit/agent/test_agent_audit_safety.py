@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from jarvis.agent.models import (
+from greatsage.agent.models import (
     AgentContext,
     AgentLimits,
     AgentRunStatus,
     AgentTask,
 )
-from jarvis.agent.orchestrator import AgentOrchestrator
-from jarvis.events.models import AGENT_STARTED
-from jarvis.intelligence.models import Message
+from greatsage.agent.orchestrator import AgentOrchestrator
+from greatsage.events.models import AGENT_STARTED
+from greatsage.intelligence.models import Message
 from tests.unit.agent._fakes import FakeIntelligence, FakeTools, text_handler
 
 

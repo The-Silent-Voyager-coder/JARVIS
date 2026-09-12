@@ -6,9 +6,9 @@ import asyncio
 
 import pytest
 
-from jarvis.events.bus import EventBus
-from jarvis.events.models import TASK_STARTED, TOOL_COMPLETED, TOOL_STARTED, Event
-from jarvis.exceptions import EventError
+from greatsage.events.bus import EventBus
+from greatsage.events.models import TASK_STARTED, TOOL_COMPLETED, TOOL_STARTED, Event
+from greatsage.exceptions import EventError
 
 
 def run(coro):

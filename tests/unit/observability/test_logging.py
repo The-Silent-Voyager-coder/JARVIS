@@ -6,8 +6,8 @@ import json
 import logging
 from pathlib import Path
 
-from jarvis.configuration.model import LoggingConfig
-from jarvis.observability.logging import (
+from greatsage.configuration.model import LoggingConfig
+from greatsage.observability.logging import (
     JsonFormatter,
     correlation,
     current_correlation,
@@ -16,7 +16,7 @@ from jarvis.observability.logging import (
 )
 
 
-def _make_record(message: str, logger: str = "jarvis.test", **extra) -> logging.LogRecord:
+def _make_record(message: str, logger: str = "greatsage.test", **extra) -> logging.LogRecord:
     record = logging.LogRecord(
         name=logger,
         level=logging.INFO,
@@ -35,7 +35,7 @@ def test_formatter_produces_json_with_required_fields() -> None:
     line = JsonFormatter().format(_make_record("hello world"))
     entry = json.loads(line)
     assert entry["level"] == "INFO"
-    assert entry["logger"] == "jarvis.test"
+    assert entry["logger"] == "greatsage.test"
     assert entry["message"] == "hello world"
     assert entry["component"] == "test"
     assert entry["timestamp"]
@@ -56,7 +56,7 @@ def test_extra_component_and_context_attrs() -> None:
 
 
 def test_correlation_context_inherited_by_logs() -> None:
-    logger = logging.getLogger("jarvis.correlate")
+    logger = logging.getLogger("greatsage.correlate")
     captured: list[str] = []
 
     class Capture(logging.Handler):
@@ -133,7 +133,7 @@ def test_exception_serialized() -> None:
         raise ValueError("boom")
     except ValueError:
         record = logging.LogRecord(
-            name="jarvis.test", level=logging.ERROR, pathname=__file__, lineno=1,
+            name="greatsage.test", level=logging.ERROR, pathname=__file__, lineno=1,
             msg="failure", args=(), exc_info=__import__("sys").exc_info(),
         )
     entry = json.loads(JsonFormatter().format(record))
@@ -143,7 +143,7 @@ def test_exception_serialized() -> None:
 def test_setup_logging_writes_json_file(tmp_path: Path) -> None:
     cfg = LoggingConfig(level="DEBUG", format="json", retention_days=2)
     setup_logging(cfg, tmp_path)
-    logger = logging.getLogger("jarvis.filecheck")
+    logger = logging.getLogger("greatsage.filecheck")
     logger.info("wrote to file", extra={"component": "test"})
     flush_logging()
 
@@ -155,6 +155,6 @@ def test_setup_logging_writes_json_file(tmp_path: Path) -> None:
 
 def test_console_handler_added_and_level_applied(tmp_path: Path) -> None:
     setup_logging(LoggingConfig(level="WARNING", format="json", retention_days=1), tmp_path)
-    logger = logging.getLogger("jarvis.consolecheck")
+    logger = logging.getLogger("greatsage.consolecheck")
     assert logger.isEnabledFor(logging.WARNING)
     assert not logger.isEnabledFor(logging.INFO)

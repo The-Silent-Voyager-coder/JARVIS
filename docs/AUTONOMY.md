@@ -16,7 +16,7 @@
 | Audit | `PlanCreated/Failed`, `Task*`, `TaskStep*` | + `PlanVerified`, `PlanApproved`, `approved` flag on `TaskStarted` |
 | CLI | `workspace`, `task` | + `planning` group, `task run --verify-only/--approve` |
 
-The agent loop (`jarvis/agent/`) is unchanged: it still proposes one tool
+The agent loop (`greatsage/agent/`) is unchanged: it still proposes one tool
 call per step through `ToolService.execute`. Task-graph execution is the
 multi-step sibling — deterministic plans through the same security
 pipeline, never a bypass.
@@ -48,7 +48,7 @@ FAILED               FAILED          CANCELLED / TIMED_OUT
 with `PAUSED` for cooperative pause/resume. Resume skips already
 completed steps by **step id** (correct under topo ordering).
 
-## 3. Task-Graph Semantics (`jarvis/planning/graph.py`)
+## 3. Task-Graph Semantics (`greatsage/planning/graph.py`)
 
 - `Step.depends_on: tuple[str, ...]` (default empty = sequential).
 - `topological_order()`: Kahn's algorithm, stable — ready steps run in
@@ -60,7 +60,7 @@ completed steps by **step id** (correct under topo ordering).
   potential. Execution itself stays strictly sequential — one tool call
   at a time through `ToolService.execute`.
 
-## 4. Verification (`jarvis/planning/verify.py`)
+## 4. Verification (`greatsage/planning/verify.py`)
 
 `verify_plan()` is pure (no I/O, no tool execution). It checks:
 
@@ -105,8 +105,8 @@ execution_order[], max_level}`. Entry points:
 | total timeout | 600 s | 3600 s | executor |
 | output | tool `max_output_bytes` 64 KiB | per tools config | `ToolService` |
 
-Ceilings live in `jarvis/planning/limits.py` and
-`jarvis/task/limits.py`; config validation rejects anything above them
+Ceilings live in `greatsage/planning/limits.py` and
+`greatsage/task/limits.py`; config validation rejects anything above them
 at load time, and the executor re-checks during the run.
 
 ## 7. Audit Events (payloads carry ids/reasons only)

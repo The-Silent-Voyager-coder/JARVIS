@@ -7,13 +7,13 @@ from typing import Any
 
 import pytest
 
-from jarvis.configuration.loader import load_config
-from jarvis.events.models import SPEECH_TRANSCRIBED, VOICE_SPOKEN, VOICE_WAKE_DETECTED
-from jarvis.exceptions import VoiceUnavailableError, VoiceValidationError
-from jarvis.voice.limits import VoiceLimits
-from jarvis.voice.models import new_utterance_id
-from jarvis.voice.service import VoiceService
-from jarvis.voice.tts import encode_wav
+from greatsage.configuration.loader import load_config
+from greatsage.events.models import SPEECH_TRANSCRIBED, VOICE_SPOKEN, VOICE_WAKE_DETECTED
+from greatsage.exceptions import VoiceUnavailableError, VoiceValidationError
+from greatsage.voice.limits import VoiceLimits
+from greatsage.voice.models import new_utterance_id
+from greatsage.voice.service import VoiceService
+from greatsage.voice.tts import encode_wav
 
 
 def write_config(tmp_path: Path) -> Path:

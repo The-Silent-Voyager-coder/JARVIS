@@ -10,9 +10,9 @@ from typing import Any
 
 import pytest
 
-from jarvis.tools.homeassistant_tools import HomeAssistantCallTool, HomeAssistantStatesTool
-from jarvis.tools.models import ToolCategory, ToolContext, ToolRisk
-from jarvis.tools.network_tools import NetworkFetchTool
+from greatsage.tools.homeassistant_tools import HomeAssistantCallTool, HomeAssistantStatesTool
+from greatsage.tools.models import ToolCategory, ToolContext, ToolRisk
+from greatsage.tools.network_tools import NetworkFetchTool
 
 
 def _context() -> ToolContext:

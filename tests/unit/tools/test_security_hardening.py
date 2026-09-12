@@ -16,17 +16,17 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.configuration.model import ToolSecurityMode
-from jarvis.tools import shell_classifier as sc
-from jarvis.tools.models import ToolCategory, ToolDecision, ToolRequest, ToolRisk
-from jarvis.tools.pathsecurity import is_protected_path
-from jarvis.tools.policy import (
+from greatsage.configuration.model import ToolSecurityMode
+from greatsage.tools import shell_classifier as sc
+from greatsage.tools.models import ToolCategory, ToolDecision, ToolRequest, ToolRisk
+from greatsage.tools.pathsecurity import is_protected_path
+from greatsage.tools.policy import (
     PathSecurityHook,
     SecurityPolicy,
     SensitiveArgumentHook,
 )
-from jarvis.tools.redaction import looks_like_secret_value, redact_secrets
-from jarvis.tools.shell_classifier import CommandClass, classify_command
+from greatsage.tools.redaction import looks_like_secret_value, redact_secrets
+from greatsage.tools.shell_classifier import CommandClass, classify_command
 from tests.unit.tools.stub_tools import StubProbe
 
 

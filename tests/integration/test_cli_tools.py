@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.cli import EXIT_FAILURE, EXIT_INVALID, EXIT_OK, main
+from greatsage.cli import EXIT_FAILURE, EXIT_INVALID, EXIT_OK, main
 
 
 def write_tools_config(tmp_path: Path) -> Path:

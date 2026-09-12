@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.vision import limits
+from greatsage.vision import limits
 
 
 def test_defaults_within_ceilings() -> None:

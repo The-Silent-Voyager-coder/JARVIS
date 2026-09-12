@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.exceptions import VoiceValidationError
-from jarvis.voice.limits import VoiceLimits
-from jarvis.voice.stt import MockSTTBackend, OfflineSTTBackend, STTManager, is_wav_bytes
-from jarvis.voice.tts import MockTTSBackend, OfflineTTSBackend, TTSManager, encode_wav
-from jarvis.voice.wakeword import KeywordWakeDetector
+from greatsage.exceptions import VoiceValidationError
+from greatsage.voice.limits import VoiceLimits
+from greatsage.voice.stt import MockSTTBackend, OfflineSTTBackend, STTManager, is_wav_bytes
+from greatsage.voice.tts import MockTTSBackend, OfflineTTSBackend, TTSManager, encode_wav
+from greatsage.voice.wakeword import KeywordWakeDetector
 
 
 def test_wake_detects_keyword() -> None:

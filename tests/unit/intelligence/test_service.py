@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.configuration.loader import load_config
-from jarvis.core.runtime import Runtime
-from jarvis.events.models import (
+from greatsage.configuration.loader import load_config
+from greatsage.core.runtime import Runtime
+from greatsage.events.models import (
     AI_PROVIDER_SELECTED,
     AI_PROVIDER_UNAVAILABLE,
     AI_REQUEST_COMPLETED,
@@ -20,10 +20,10 @@ from jarvis.events.models import (
     AI_STREAM_STARTED,
     Event,
 )
-from jarvis.exceptions import ProviderError, RoutingError
-from jarvis.intelligence.models import AIRequest, Message
-from jarvis.intelligence.provider import ProviderState
-from jarvis.intelligence.service import IntelligenceService
+from greatsage.exceptions import ProviderError, RoutingError
+from greatsage.intelligence.models import AIRequest, Message
+from greatsage.intelligence.provider import ProviderState
+from greatsage.intelligence.service import IntelligenceService
 
 
 def run(coro):
@@ -96,7 +96,7 @@ def test_unavailable_provider_emits_event(tmp_path: Path) -> None:
 
 
 def test_health_check_registration(service: IntelligenceService) -> None:
-    from jarvis.core.health import HealthRegistry
+    from greatsage.core.health import HealthRegistry
 
     registry = HealthRegistry()
     service.register_mock()
@@ -107,7 +107,7 @@ def test_health_check_registration(service: IntelligenceService) -> None:
 
 
 def test_stream_via_facade(service: IntelligenceService) -> None:
-    from jarvis.intelligence.provider import Capability
+    from greatsage.intelligence.provider import Capability
 
     events: list[str] = []
     service.publisher = _dropping_publisher("intelligence", events)

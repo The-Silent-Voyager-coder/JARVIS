@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.cli import EXIT_FAILURE, EXIT_INVALID, EXIT_OK, main
+from greatsage.cli import EXIT_FAILURE, EXIT_INVALID, EXIT_OK, main
 
 
 def test_help_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
@@ -37,7 +37,7 @@ def test_config_validate_defaults(
 ) -> None:
     monkeypatch.delenv("JARVIS_CONFIG_PATH", raising=False)
     monkeypatch.setattr(
-        "jarvis.configuration.loader.DEFAULT_CONFIG_PATH",
+        "greatsage.configuration.loader.DEFAULT_CONFIG_PATH",
         tmp_path / "absent.yaml",
     )
     code = main(["config", "validate"])
@@ -237,8 +237,8 @@ def test_ai_health_with_invalid_config(
 
 
 def _seed_memories(config_path: Path) -> dict[str, str]:
-    from jarvis.configuration.loader import load_config
-    from jarvis.memory.service import MemoryService
+    from greatsage.configuration.loader import load_config
+    from greatsage.memory.service import MemoryService
 
     service = MemoryService()
     service.start(load_config(config_path).config)
@@ -395,8 +395,8 @@ def test_memory_list_json(valid_config_yaml: Path, capsys: pytest.CaptureFixture
 
 
 def _seed_episodes(config_path: Path) -> None:
-    from jarvis.configuration.loader import load_config
-    from jarvis.memory.service import MemoryService
+    from greatsage.configuration.loader import load_config
+    from greatsage.memory.service import MemoryService
 
     service = MemoryService()
     service.start(load_config(config_path).config)
@@ -540,12 +540,12 @@ def test_memory_search_semantic_needs_enabled(
 def test_memory_search_semantic_and_reindex(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from jarvis.configuration.loader import load_config
-    from jarvis.memory.service import MemoryService
+    from greatsage.configuration.loader import load_config
+    from greatsage.memory.service import MemoryService
     from tests.unit.memory.test_memory_embeddings import _FakeProvider
 
     cfg = _embedding_config(tmp_path, enabled=True)
-    monkeypatch.setattr("jarvis.memory.service.OllamaEmbeddingProvider", _FakeProvider)
+    monkeypatch.setattr("greatsage.memory.service.OllamaEmbeddingProvider", _FakeProvider)
     service = MemoryService()
     service.start(load_config(cfg).config)
     try:

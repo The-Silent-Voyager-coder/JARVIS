@@ -9,10 +9,10 @@ from typing import Any
 
 import pytest
 
-from jarvis.configuration.loader import load_config
-from jarvis.configuration.model import JarvisConfig
-from jarvis.core.health import HealthRegistry, HealthStatus
-from jarvis.events.models import (
+from greatsage.configuration.loader import load_config
+from greatsage.configuration.model import JarvisConfig
+from greatsage.core.health import HealthRegistry, HealthStatus
+from greatsage.events.models import (
     MEMORY_CREATED,
     MEMORY_DELETED,
     MEMORY_EXPIRED,
@@ -20,13 +20,13 @@ from jarvis.events.models import (
     MEMORY_UPDATED,
     Event,
 )
-from jarvis.exceptions import (
+from greatsage.exceptions import (
     MemoryNotFoundError,
     MemoryUnavailableError,
     MemoryValidationError,
 )
-from jarvis.memory.models import MemoryType, Provenance, utcnow
-from jarvis.memory.service import MemoryService
+from greatsage.memory.models import MemoryType, Provenance, utcnow
+from greatsage.memory.service import MemoryService
 
 
 class RecordingPublisher:

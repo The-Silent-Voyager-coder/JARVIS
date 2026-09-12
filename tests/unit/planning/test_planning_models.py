@@ -2,8 +2,8 @@
 
 import pytest
 
-from jarvis.exceptions import PlanningValidationError
-from jarvis.planning.models import Plan, Step
+from greatsage.exceptions import PlanningValidationError
+from greatsage.planning.models import Plan, Step
 
 
 def test_step_validate() -> None:

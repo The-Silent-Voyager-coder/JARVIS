@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.delegation.limits import (
+from greatsage.delegation.limits import (
     MAX_DELEGATION_DEPTH_CEILING,
     MAX_DELEGATION_DEPTH_DEFAULT,
     MAX_OUTPUT_BYTES_CEILING,
@@ -21,7 +21,7 @@ from jarvis.delegation.limits import (
     MAX_WALL_TIME_SECONDS_CEILING,
     MAX_WALL_TIME_SECONDS_DEFAULT,
 )
-from jarvis.delegation.models import (
+from greatsage.delegation.models import (
     DelegationLimits,
     DelegationPermission,
     DelegationRequest,
@@ -30,7 +30,7 @@ from jarvis.delegation.models import (
     DelegationState,
     transition_state,
 )
-from jarvis.exceptions import DelegationStateError, DelegationValidationError
+from greatsage.exceptions import DelegationStateError, DelegationValidationError
 
 
 class TestStateMachine:

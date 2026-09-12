@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.exceptions import ToolExecutionError, ToolValidationError
-from jarvis.tools.models import ToolContext
-from jarvis.tools.shell_tools import ShellExecuteTool
+from greatsage.exceptions import ToolExecutionError, ToolValidationError
+from greatsage.tools.models import ToolContext
+from greatsage.tools.shell_tools import ShellExecuteTool
 
 PYTHON = sys.executable
 

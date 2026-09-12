@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from jarvis.tools.models import (
+from greatsage.tools.models import (
     ApprovalOutcome,
     BaseTool,
     ToolCategory,

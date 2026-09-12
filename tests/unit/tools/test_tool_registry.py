@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.exceptions import ToolNotFoundError, ToolValidationError
-from jarvis.tools.models import ToolCategory, ToolRisk
-from jarvis.tools.registry import ToolRegistry
+from greatsage.exceptions import ToolNotFoundError, ToolValidationError
+from greatsage.tools.models import ToolCategory, ToolRisk
+from greatsage.tools.registry import ToolRegistry
 from tests.unit.tools.stub_tools import StubProbe
 
 

@@ -6,15 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.exceptions import ToolExecutionError
-from jarvis.tools.filesystem_tools import (
+from greatsage.exceptions import ToolExecutionError
+from greatsage.tools.filesystem_tools import (
     FilesystemListTool,
     FilesystemMkdirTool,
     FilesystemReadTool,
     FilesystemStatTool,
     FilesystemWriteTool,
 )
-from jarvis.tools.models import ToolContext, ToolRisk
+from greatsage.tools.models import ToolContext, ToolRisk
 
 
 def make_context(tmp_path: Path, max_bytes: int = 65536) -> ToolContext:
@@ -170,7 +170,7 @@ def test_write_missing_parent_rejected(tmp_path: Path) -> None:
 
 
 def test_no_delete_tool_exists() -> None:
-    from jarvis.tools.defaults import DEFAULT_TOOL_CLASSES
+    from greatsage.tools.defaults import DEFAULT_TOOL_CLASSES
 
     ids = {cls.id for cls in DEFAULT_TOOL_CLASSES}
     assert not any("delete" in tool_id or "remove" in tool_id for tool_id in ids)
@@ -185,7 +185,7 @@ def test_risk_levels_match_design() -> None:
 
 
 def test_list_cap_is_enforced_in_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("jarvis.tools.filesystem_tools.MAX_LIST_ENTRIES", 5)
+    monkeypatch.setattr("greatsage.tools.filesystem_tools.MAX_LIST_ENTRIES", 5)
     for index in range(10):
         (tmp_path / f"f{index}.txt").write_text("x")
     result = FilesystemListTool().execute({"path": str(tmp_path)}, make_context(tmp_path))

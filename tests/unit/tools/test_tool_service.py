@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.configuration.loader import load_config
-from jarvis.core.health import HealthRegistry, HealthStatus
-from jarvis.events.models import (
+from greatsage.configuration.loader import load_config
+from greatsage.core.health import HealthRegistry, HealthStatus
+from greatsage.events.models import (
     TOOL_ALLOWED,
     TOOL_APPROVAL_REQUESTED,
     TOOL_APPROVED,
@@ -21,14 +21,14 @@ from jarvis.events.models import (
     TOOL_REQUESTED,
     TOOL_STARTED,
 )
-from jarvis.exceptions import (
+from greatsage.exceptions import (
     ToolNotFoundError,
     ToolPermissionDeniedError,
     ToolUnavailableError,
     ToolValidationError,
 )
-from jarvis.tools.models import ApprovalOutcome, ToolRequest
-from jarvis.tools.service import ToolService
+from greatsage.tools.models import ApprovalOutcome, ToolRequest
+from greatsage.tools.service import ToolService
 from tests.unit.tools.stub_tools import EventRecorder, RecordingApprovalProvider
 
 SEQ_ALLOWED = [TOOL_REQUESTED, TOOL_ALLOWED, TOOL_STARTED, TOOL_COMPLETED]

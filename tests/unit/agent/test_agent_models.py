@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.agent.models import (
+from greatsage.agent.models import (
     AgentContext,
     AgentResult,
     AgentRunStatus,
@@ -14,7 +14,7 @@ from jarvis.agent.models import (
     ToolCallResult,
     transition_state,
 )
-from jarvis.exceptions import AgentStateError, AgentValidationError
+from greatsage.exceptions import AgentStateError, AgentValidationError
 
 
 def test_created_enters_running() -> None:

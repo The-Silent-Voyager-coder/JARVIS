@@ -5,15 +5,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from jarvis.configuration.loader import load_config
-from jarvis.planning.planner import Planner
-from jarvis.task.executor import TaskExecutor
-from jarvis.task.models import TaskRecord, TaskState
-from jarvis.task.sqlite_repository import SqliteTaskRepository
-from jarvis.tools.approval import DeterministicApprovalProvider
-from jarvis.tools.models import ApprovalOutcome
-from jarvis.tools.service import ToolService
-from jarvis.workspace.scanner import WorkspaceScanner
+from greatsage.configuration.loader import load_config
+from greatsage.planning.planner import Planner
+from greatsage.task.executor import TaskExecutor
+from greatsage.task.models import TaskRecord, TaskState
+from greatsage.task.sqlite_repository import SqliteTaskRepository
+from greatsage.tools.approval import DeterministicApprovalProvider
+from greatsage.tools.models import ApprovalOutcome
+from greatsage.tools.service import ToolService
+from greatsage.workspace.scanner import WorkspaceScanner
 
 
 def write_config(tmp_path: Path) -> object:
@@ -99,7 +99,7 @@ def test_scan_plan_execute_three_steps(tmp_path: Path) -> None:
     assert plan.steps[2].tool_id == "filesystem.write"
 
     # Adjust plan steps to use real paths inside workspace
-    from jarvis.planning.models import Step
+    from greatsage.planning.models import Step
 
     steps = (
         Step(sequence=1, description=plan.steps[0].description, tool_id="filesystem.list", arguments={"path": str(ws)}, risk_estimate="low", acceptance_criteria="ok"),

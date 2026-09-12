@@ -40,7 +40,7 @@ jobs:
         run: pytest tests -q
 
       - name: ruff
-        run: ruff check jarvis tests
+        run: ruff check greatsage tests
 
       - name: mypy
-        run: mypy jarvis
+        run: mypy greatsage

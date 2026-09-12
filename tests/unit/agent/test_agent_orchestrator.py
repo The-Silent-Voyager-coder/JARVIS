@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 
-from jarvis.agent.approval import AgentApprovalProvider
-from jarvis.agent.cancellation import CancellationToken
-from jarvis.agent.models import (
+from greatsage.agent.approval import AgentApprovalProvider
+from greatsage.agent.cancellation import CancellationToken
+from greatsage.agent.models import (
     AgentContext,
     AgentLimits,
     AgentResult,
@@ -14,8 +14,8 @@ from jarvis.agent.models import (
     AgentState,
     AgentTask,
 )
-from jarvis.agent.orchestrator import AgentOrchestrator
-from jarvis.events.models import (
+from greatsage.agent.orchestrator import AgentOrchestrator
+from greatsage.events.models import (
     AGENT_COMPLETED,
     AGENT_FAILED,
     AGENT_LIMIT_REACHED,
@@ -25,8 +25,8 @@ from jarvis.events.models import (
     AGENT_TOOL_CALL_COMPLETED,
     AGENT_TOOL_CALL_REQUESTED,
 )
-from jarvis.exceptions import ProviderError
-from jarvis.intelligence.models import Message
+from greatsage.exceptions import ProviderError
+from greatsage.intelligence.models import Message
 from tests.unit.agent._fakes import (
     FakeIntelligence,
     FakeTools,

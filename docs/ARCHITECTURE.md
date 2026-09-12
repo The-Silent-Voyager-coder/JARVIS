@@ -134,7 +134,7 @@ Good:     core -> AIProvider ──└──→ OpenCodeProvider
 
 ### Phase 1 implementation
 
-Lifecycle states (`jarvis/core/lifecycle.py`):
+Lifecycle states (`greatsage/core/lifecycle.py`):
 
 ```text
 CREATED → INITIALIZING → RUNNING → STOPPING → STOPPED
@@ -152,7 +152,7 @@ CREATED → INITIALIZING → RUNNING → STOPPING → STOPPED
 - `Runtime.stop()` is idempotent and safe before start: stop services in
   reverse dependency order → publish `RuntimeStopping` and `RuntimeStopped` →
   close the bus → flush logs → `STOPPED`.
-- Health (`jarvis/core/health.py`): core checks — `core` (lifecycle state),
+- Health (`greatsage/core/health.py`): core checks — `core` (lifecycle state),
   `configuration` (loaded + validated), `event_bus` (open and accepting),
   `service_registry` (registered + started), `storage` (data root writable) —
   plus one self-registered check per subsystem (`intelligence` from Phase 2,
@@ -163,7 +163,7 @@ CREATED → INITIALIZING → RUNNING → STOPPING → STOPPED
 
 ## 5.1 Intelligence Layer (Phase 2)
 
-The intelligence layer (`jarvis/intelligence/`) implements the Phase 0
+The intelligence layer (`greatsage/intelligence/`) implements the Phase 0
 `AIProvider` abstraction: provider-neutral models, a provider interface,
 registry, deterministic router, adapters, mock provider, read-only benchmark,
 and the service facade the runtime owns.
@@ -171,7 +171,7 @@ and the service facade the runtime owns.
 ### Package layout
 
 ```text
-jarvis/intelligence/
+greatsage/intelligence/
 ├── models.py      provider-neutral AIRequest/AIResponse/StreamChunk/Message/
 │                  TokenUsage/ToolCall - the only types the core sees
 ├── provider.py    ProviderState, ProviderCapabilities, AIProvider ABC,
@@ -270,7 +270,7 @@ events + states; they never crash the runtime, the bus, or other providers.
 
 ## 5.2 Memory Layer (Phase 3)
 
-The memory layer (`jarvis/memory/`) implements the Phase 0 memory contract:
+The memory layer (`greatsage/memory/`) implements the Phase 0 memory contract:
 four memory categories, typed entries with provenance and confidence, SQLite
 persistence with schema-versioned migrations, a repository abstraction,
 deterministic retrieval with a documented ranking formula, session-scoped RAM
@@ -280,7 +280,7 @@ isolation. See `docs/MEMORY.md` for the full contract.
 ### Package layout
 
 ```text
-jarvis/memory/
+greatsage/memory/
 ├── models.py           MemoryType (working/long_term/episodic/semantic),
 │                       Provenance, Memory (typed entry), MemoryFilter,
 │                       RankedMemory/MemoryRetrieval, content normalization
@@ -363,13 +363,13 @@ content (privacy rule, `docs/SECURITY_MODEL.md` §8).
 
 ## 5.3 Tool Layer (Phase 4)
 
-The tool layer (`jarvis/tools/`) implements the Phase 0 permission-aware tool
+The tool layer (`greatsage/tools/`) implements the Phase 0 permission-aware tool
 contract as an executable security pipeline. Full contract: `docs/TOOLS.md`.
 
 ### Package layout
 
 ```text
-jarvis/tools/
+greatsage/tools/
 ├── models.py            BaseTool, ToolRequest, ToolContext, ToolResult,
 │                        ToolRisk (safe..critical), ToolCategory, ToolDecision,
 │                        ApprovalOutcome, validate_arguments (schema subset)
@@ -414,7 +414,7 @@ jarvis/tools/
 
 ## 5.4 Agent Layer (Phase 5A)
 
-The agent layer (`jarvis/agent/`) implements the bounded, auditable
+The agent layer (`greatsage/agent/`) implements the bounded, auditable
 AI→tool→result→AI loop over the Phase 4 ToolService. The orchestrator holds
 the loop logic; the service owns provider gating, limits, approval swap,
 memory retrieval, cancellation, and health. Authority hierarchy:
@@ -424,7 +424,7 @@ flow** (see `docs/AGENTS.md`).
 ### Package layout
 
 ```text
-jarvis/agent/
+greatsage/agent/
 ├── models.py           AgentTask, AgentStep, ToolCall (id/tool_id/structured
 │                       arguments/sequence — never an opaque shell string),
 │                       ToolCallResult, AgentResult, AgentRunStatus,
@@ -493,7 +493,7 @@ cancelled and ends the run `CANCELLED`.
 ### Limit hierarchy
 
 Config `agent:` block + run-time overrides vs. hard ceilings
-(`jarvis/agent/limits.py`): the smaller applicable limit wins. This is a
+(`greatsage/agent/limits.py`): the smaller applicable limit wins. This is a
 runtime invariant, not a documentation convention.
 
 ### Service facade (service.py)
@@ -511,28 +511,28 @@ and publishes `AGENT_*` events with exactly one terminal state per failure.
 ## 5.5 Workspace / Planning / Task Layer (Phase 6)
 
 Phase 6 adds the execution substrate that Phase 7 autonomy will build on:
-workspace discovery (`jarvis/workspace/`), deterministic plan decomposition
-(`jarvis/planning/` — template/rule based, **no AI provider calls**), and
-bounded multi-step task execution (`jarvis/task/` — steps run exclusively
+workspace discovery (`greatsage/workspace/`), deterministic plan decomposition
+(`greatsage/planning/` — template/rule based, **no AI provider calls**), and
+bounded multi-step task execution (`greatsage/task/` — steps run exclusively
 through the Phase 4 tool pipeline, so allow/ask/deny, scope checks, and
 audit entries apply unchanged).
 
 ```text
-jarvis/workspace/     models, limits, scanner (depth/entry caps, timeout),
+greatsage/workspace/     models, limits, scanner (depth/entry caps, timeout),
                       SQLite repository, service facade (scan/info/health)
-jarvis/planning/      models (Plan/Step, 1..n sequence validation),
+greatsage/planning/      models (Plan/Step, 1..n sequence validation),
                       limits (max_plan_steps + ceiling), deterministic
                       Planner (goal-clause → known-safe tool mapping),
                       SQLite repository, service facade
                       (create_plan/get/list/health)
-jarvis/task/          models (TaskReport, TaskState machine), limits,
+greatsage/task/          models (TaskReport, TaskState machine), limits,
                       cancellation, executor (per-step + total timeouts,
                       unknown-tool and protected-path denial),
                       SQLite repository, service facade
                       (run/resume/list/get/cancel/health)
 ```
 
-Runtime wiring (`jarvis/core/runtime.py`): the Runtime owns all three
+Runtime wiring (`greatsage/core/runtime.py`): the Runtime owns all three
 services, starts them from `workspace:`/`planning:`/`task:` config blocks
 (enabled-gated, ceiling-validated), registers `workspace`/`planning`/`task`
 health checks, and exposes them as `runtime.workspace/planning/task` for
@@ -617,10 +617,10 @@ delivery per source. Persisted event logs are part of observability.
 
 ### Phase 1 implementation
 
-`jarvis/events/models.py` defines the immutable `Event` envelope (above) and
+`greatsage/events/models.py` defines the immutable `Event` envelope (above) and
 the catalog of event-type constants; `RuntimeStarted`/`RuntimeStopping`/
 `RuntimeStopped` were added in Phase 1 to report lifecycle transitions on the
-bus. `jarvis/events/bus.py` implements `EventBus`:
+bus. `greatsage/events/bus.py` implements `EventBus`:
 
 - `subscribe(type | None, handler)` / `unsubscribe` / `clear`; handlers may be
   sync callables or coroutines.
@@ -660,7 +660,7 @@ from logs + task history.
 
 ### Phase 1 implementation
 
-`jarvis/observability/logging.py`:
+`greatsage/observability/logging.py`:
 
 - `setup_logging(cfg, logs_dir, console=True)` configures the `jarvis`
   logger: one JSON record per line to stdout and a rotating

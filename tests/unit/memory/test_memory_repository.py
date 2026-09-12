@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.exceptions import MemoryDatabaseError, MemoryNotFoundError
-from jarvis.memory.models import (
+from greatsage.exceptions import MemoryDatabaseError, MemoryNotFoundError
+from greatsage.memory.models import (
     Memory,
     MemoryFilter,
     MemoryType,
@@ -17,7 +17,7 @@ from jarvis.memory.models import (
     new_memory_id,
     utcnow,
 )
-from jarvis.memory.sqlite_repository import SCHEMA_VERSION, SqliteMemoryRepository
+from greatsage.memory.sqlite_repository import SCHEMA_VERSION, SqliteMemoryRepository
 
 
 def _memory(content: str = "hello world", **overrides) -> Memory:

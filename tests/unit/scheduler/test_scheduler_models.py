@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.exceptions import SchedulerValidationError
-from jarvis.scheduler import limits
-from jarvis.scheduler.models import Schedule, ScheduleKind
+from greatsage.exceptions import SchedulerValidationError
+from greatsage.scheduler import limits
+from greatsage.scheduler.models import Schedule, ScheduleKind
 
 
 def test_kinds_closed_set() -> None:

@@ -8,31 +8,31 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.agent.approval import AgentApprovalProvider
-from jarvis.agent.models import AgentState
-from jarvis.agent.service import AgentService
-from jarvis.configuration.loader import load_config
-from jarvis.core.health import HealthRegistry, HealthStatus
-from jarvis.delegation.models import (
+from greatsage.agent.approval import AgentApprovalProvider
+from greatsage.agent.models import AgentState
+from greatsage.agent.service import AgentService
+from greatsage.configuration.loader import load_config
+from greatsage.core.health import HealthRegistry, HealthStatus
+from greatsage.delegation.models import (
     DelegationEvent,
     DelegationEventKind,
     DelegationRequest,
     DelegationState,
 )
-from jarvis.exceptions import (
+from greatsage.exceptions import (
     AgentUnavailableError,
     AgentValidationError,
     DelegationUnavailableError,
     ProviderCapabilityError,
     ProviderUnavailableError,
 )
-from jarvis.intelligence.provider import (
+from greatsage.intelligence.provider import (
     Capability,
     ProviderCapabilities,
     ProviderState,
 )
-from jarvis.tools.approval import DeterministicApprovalProvider
-from jarvis.tools.models import ApprovalOutcome
+from greatsage.tools.approval import DeterministicApprovalProvider
+from greatsage.tools.models import ApprovalOutcome
 from tests.unit.agent._fakes import (
     FakeIntelligence,
     FakeProvider,

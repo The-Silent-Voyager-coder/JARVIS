@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.tools.pathsecurity import (
+from greatsage.tools.pathsecurity import (
     canonicalize,
     is_protected_path,
     is_within,

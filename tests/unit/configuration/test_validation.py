@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.configuration.validation import apply_env, coerce_env, validate
+from greatsage.configuration.validation import apply_env, coerce_env, validate
 
 
 def test_valid_default_raw_has_no_problems() -> None:
@@ -151,7 +151,7 @@ def test_yaml_dict_where_scalar_expected() -> None:
 
 
 def test_format_problems_identifies_field_value_expected() -> None:
-    from jarvis.configuration.validation import format_problems
+    from greatsage.configuration.validation import format_problems
 
     problems = validate({"logging": {"level": 5}})
     rendered = format_problems(problems)

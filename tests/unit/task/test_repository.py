@@ -3,8 +3,8 @@
 
 from pathlib import Path
 
-from jarvis.task.models import StepResult, TaskRecord, TaskState
-from jarvis.task.sqlite_repository import SqliteTaskRepository
+from greatsage.task.models import StepResult, TaskRecord, TaskState
+from greatsage.task.sqlite_repository import SqliteTaskRepository
 
 
 def test_task_repository_crud(tmp_path: Path) -> None:

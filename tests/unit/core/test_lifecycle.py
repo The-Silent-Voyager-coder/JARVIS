@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.core.lifecycle import Lifecycle, RuntimeState
-from jarvis.exceptions import LifecycleError
+from greatsage.core.lifecycle import Lifecycle, RuntimeState
+from greatsage.exceptions import LifecycleError
 
 
 def test_valid_sequence() -> None:

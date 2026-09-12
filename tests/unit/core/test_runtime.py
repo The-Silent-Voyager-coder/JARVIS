@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.configuration.loader import load_config
-from jarvis.core.lifecycle import RuntimeState
-from jarvis.core.runtime import Runtime
-from jarvis.events.models import RUNTIME_STOPPED, RUNTIME_STOPPING, TASK_COMPLETED, Event
-from jarvis.exceptions import LifecycleError
+from greatsage.configuration.loader import load_config
+from greatsage.core.lifecycle import RuntimeState
+from greatsage.core.runtime import Runtime
+from greatsage.events.models import RUNTIME_STOPPED, RUNTIME_STOPPING, TASK_COMPLETED, Event
+from greatsage.exceptions import LifecycleError
 
 
 def test_startup_reaches_running_and_creates_dirs(valid_config_yaml: Path, tmp_path: Path) -> None:

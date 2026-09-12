@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.configuration.loader import load_config
-from jarvis.exceptions import SchedulerUnavailableError, SchedulerValidationError
-from jarvis.scheduler.models import ScheduleKind
-from jarvis.scheduler.service import SchedulerService
-from jarvis.scheduler.sqlite_repository import SqliteSchedulerRepository
+from greatsage.configuration.loader import load_config
+from greatsage.exceptions import SchedulerUnavailableError, SchedulerValidationError
+from greatsage.scheduler.models import ScheduleKind
+from greatsage.scheduler.service import SchedulerService
+from greatsage.scheduler.sqlite_repository import SqliteSchedulerRepository
 
 
 def _service(tmp_path: Path) -> SchedulerService:
@@ -29,7 +29,7 @@ def _service(tmp_path: Path) -> SchedulerService:
 def test_repository_round_trip(tmp_path: Path) -> None:
     repo = SqliteSchedulerRepository(tmp_path / "s.db")
     repo.initialize()
-    from jarvis.scheduler.models import Schedule
+    from greatsage.scheduler.models import Schedule
 
     s = Schedule(name="a", kind=ScheduleKind.BRIEFING, interval_seconds=3600)
     s.validate()
@@ -86,7 +86,7 @@ def test_tick_runs_due_only(tmp_path: Path) -> None:
         assert repo is not None
         item = repo.get(future["id"])
         assert item is not None
-        from jarvis.scheduler.models import Schedule
+        from greatsage.scheduler.models import Schedule
 
         repo.save(Schedule(
             id=item.id, name=item.name, kind=item.kind,

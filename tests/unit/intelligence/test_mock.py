@@ -7,10 +7,10 @@ import asyncio
 
 import pytest
 
-from jarvis.exceptions import ProviderCapabilityError, ProviderError
-from jarvis.intelligence.mock import MockProvider
-from jarvis.intelligence.models import AIRequest, Message, ToolCall, ToolDefinition
-from jarvis.intelligence.provider import Capability, ProviderState
+from greatsage.exceptions import ProviderCapabilityError, ProviderError
+from greatsage.intelligence.mock import MockProvider
+from greatsage.intelligence.models import AIRequest, Message, ToolCall, ToolDefinition
+from greatsage.intelligence.provider import Capability, ProviderState
 
 
 def run(coro):
@@ -122,7 +122,7 @@ def test_tool_calling_gate() -> None:
 
 
 def test_tool_calling_supported() -> None:
-    from jarvis.intelligence.models import ToolDefinition
+    from greatsage.intelligence.models import ToolDefinition
 
     provider = MockProvider(capabilities={Capability.TOOL_CALLING})
     provider.init()

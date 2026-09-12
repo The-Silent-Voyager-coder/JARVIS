@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from jarvis.core.health import HealthRegistry, HealthStatus
+from greatsage.core.health import HealthRegistry, HealthStatus
 
 
 def test_overall_healthy_when_all_healthy() -> None:

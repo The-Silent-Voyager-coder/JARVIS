@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.agent.loopdetect import LoopDetector
-from jarvis.agent.models import ToolCall
-from jarvis.exceptions import AgentValidationError
+from greatsage.agent.loopdetect import LoopDetector
+from greatsage.agent.models import ToolCall
+from greatsage.exceptions import AgentValidationError
 
 
 def _call(tool_id: str = "filesystem.list", arguments: dict | None = None) -> ToolCall:

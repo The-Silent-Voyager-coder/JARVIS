@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.exceptions import VisionValidationError
-from jarvis.vision.models import (
+from greatsage.exceptions import VisionValidationError
+from greatsage.vision.models import (
     VisionBackend,
     VisionCapture,
     VisionDescription,

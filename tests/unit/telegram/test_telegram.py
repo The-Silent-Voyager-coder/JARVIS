@@ -8,9 +8,9 @@ from typing import Any
 
 import pytest
 
-from jarvis.telegram.bridge import HELP_TEXT, TelegramBridge
-from jarvis.telegram.client import TelegramClient, TelegramError, extract_message
-from jarvis.telegram.service import TelegramService
+from greatsage.telegram.bridge import HELP_TEXT, TelegramBridge
+from greatsage.telegram.client import TelegramClient, TelegramError, extract_message
+from greatsage.telegram.service import TelegramService
 
 
 class _FakeResponse:
@@ -147,7 +147,7 @@ telegram:
 def test_service_requires_token_and_chats(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from jarvis.configuration.loader import load_config
+    from greatsage.configuration.loader import load_config
 
     monkeypatch.delenv("JARVIS_TEST_TELEGRAM_TOKEN", raising=False)
     service = TelegramService()
@@ -160,7 +160,7 @@ def test_service_requires_token_and_chats(
 def test_listen_once_replies_allowlisted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from jarvis.configuration.loader import load_config
+    from greatsage.configuration.loader import load_config
 
     monkeypatch.setenv("JARVIS_TEST_TELEGRAM_TOKEN", "test-token")
     service = TelegramService()
@@ -224,7 +224,7 @@ def test_send_photo_multipart(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_listen_sends_photo_reply(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from jarvis.configuration.loader import load_config
+    from greatsage.configuration.loader import load_config
 
     monkeypatch.setenv("JARVIS_TEST_TELEGRAM_TOKEN", "test-token")
     service = TelegramService()

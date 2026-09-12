@@ -1,6 +1,6 @@
 # Memory Architecture (Phase 3 implementation)
 
-> Status: **implemented** (`jarvis/memory`, Phase 3). This documents the actual
+> Status: **implemented** (`greatsage/memory`, Phase 3). This documents the actual
 > contract: schema, lifecycle, provenance, confidence, retention, retrieval,
 > deletion, privacy, health, and the concurrency model. Embeddings/vector
 > search and automatic conversation ingestion are explicitly **not** part of

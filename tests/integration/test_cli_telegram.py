@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.cli import EXIT_FAILURE, EXIT_INVALID, main
+from greatsage.cli import EXIT_FAILURE, EXIT_INVALID, main
 
 
 def test_telegram_health_disabled_by_default(

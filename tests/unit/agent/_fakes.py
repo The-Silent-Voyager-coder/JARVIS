@@ -6,22 +6,22 @@ from collections import deque
 from collections.abc import Callable
 from typing import Any
 
-from jarvis.exceptions import (
+from greatsage.exceptions import (
     ToolExecutionError,
     ToolNotFoundError,
     ToolPermissionDeniedError,
     ToolValidationError,
 )
-from jarvis.intelligence.models import (
+from greatsage.intelligence.models import (
     AIRequest,
     AIResponse,
     FinishReason,
     TokenUsage,
     ToolCall,
 )
-from jarvis.intelligence.provider import Capability, ProviderCapabilities, ProviderState
-from jarvis.tools.approval import DeterministicApprovalProvider
-from jarvis.tools.models import ApprovalOutcome, ToolRequest, ToolResult
+from greatsage.intelligence.provider import Capability, ProviderCapabilities, ProviderState
+from greatsage.tools.approval import DeterministicApprovalProvider
+from greatsage.tools.models import ApprovalOutcome, ToolRequest, ToolResult
 
 _Handler = Callable[[AIRequest], AIResponse]
 

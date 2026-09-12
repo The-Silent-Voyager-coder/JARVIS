@@ -16,12 +16,12 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.exceptions import RoutingError
-from jarvis.intelligence.mock import MockProvider
-from jarvis.intelligence.models import AIRequest, Message, TaskKind
-from jarvis.intelligence.provider import Capability
-from jarvis.intelligence.registry import ProviderRegistry
-from jarvis.intelligence.router import Router
+from greatsage.exceptions import RoutingError
+from greatsage.intelligence.mock import MockProvider
+from greatsage.intelligence.models import AIRequest, Message, TaskKind
+from greatsage.intelligence.provider import Capability
+from greatsage.intelligence.registry import ProviderRegistry
+from greatsage.intelligence.router import Router
 
 
 @pytest.fixture
@@ -106,7 +106,7 @@ def test_streaming_required_filters_non_streaming(registry: ProviderRegistry) ->
 
 
 def test_tools_require_tool_calling_provider(registry: ProviderRegistry) -> None:
-    from jarvis.intelligence.models import ToolDefinition
+    from greatsage.intelligence.models import ToolDefinition
 
     plain = _ready(MockProvider("plain"))
     tooling = _ready(MockProvider("tooling", capabilities={Capability.TOOL_CALLING}))

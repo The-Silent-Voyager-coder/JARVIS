@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.exceptions import VoiceValidationError
-from jarvis.voice.file_repository import FileVoiceRepository
-from jarvis.voice.models import new_utterance_id
-from jarvis.voice.stt import STTManager
-from jarvis.voice.tts import TTSManager
+from greatsage.exceptions import VoiceValidationError
+from greatsage.voice.file_repository import FileVoiceRepository
+from greatsage.voice.models import new_utterance_id
+from greatsage.voice.stt import STTManager
+from greatsage.voice.tts import TTSManager
 
 
 def test_save_and_get_transcript(tmp_path: Path) -> None:

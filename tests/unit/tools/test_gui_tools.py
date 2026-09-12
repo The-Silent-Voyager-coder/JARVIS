@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.tools.gui_tools import GuiClickTool, GuiScreenshotTool, GuiTypeTool
-from jarvis.tools.models import ToolCategory, ToolContext, ToolRisk
+from greatsage.tools.gui_tools import GuiClickTool, GuiScreenshotTool, GuiTypeTool
+from greatsage.tools.models import ToolCategory, ToolContext, ToolRisk
 
 WIN32 = sys.platform == "win32"
 

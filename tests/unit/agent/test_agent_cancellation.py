@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.agent.cancellation import CancellationToken
-from jarvis.exceptions import AgentCancelledError
+from greatsage.agent.cancellation import CancellationToken
+from greatsage.exceptions import AgentCancelledError
 
 
 def test_not_cancelled_by_default() -> None:

@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.exceptions import WorkspaceValidationError
-from jarvis.workspace.models import ProjectType, WorkspaceInfo
+from greatsage.exceptions import WorkspaceValidationError
+from greatsage.workspace.models import ProjectType, WorkspaceInfo
 
 
 def test_workspace_info_validate() -> None:

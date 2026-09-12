@@ -6,8 +6,8 @@ import json
 import os
 from pathlib import Path
 
-from jarvis.tools.models import ToolContext
-from jarvis.tools.system_tools import SystemInfoTool
+from greatsage.tools.models import ToolContext
+from greatsage.tools.system_tools import SystemInfoTool
 
 
 def make_context(tmp_path: Path) -> ToolContext:

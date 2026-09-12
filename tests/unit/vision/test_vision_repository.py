@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.exceptions import VisionValidationError
-from jarvis.vision.capture import encode_bmp
-from jarvis.vision.file_repository import FileVisionRepository
-from jarvis.vision.models import VisionBackend, VisionCapture, new_capture_id
+from greatsage.exceptions import VisionValidationError
+from greatsage.vision.capture import encode_bmp
+from greatsage.vision.file_repository import FileVisionRepository
+from greatsage.vision.models import VisionBackend, VisionCapture, new_capture_id
 
 
 def make_record() -> tuple[VisionCapture, bytes]:

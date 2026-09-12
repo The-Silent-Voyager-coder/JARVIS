@@ -8,12 +8,12 @@ from typing import Any
 
 import pytest
 
-from jarvis import __version__
-from jarvis.core.health import HealthReport, HealthStatus
-from jarvis.exceptions import HudValidationError
-from jarvis.interface.formatting import format_dashboard, format_status
-from jarvis.interface.models import VALID_SECTIONS
-from jarvis.interface.service import HudService
+from greatsage import __version__
+from greatsage.core.health import HealthReport, HealthStatus
+from greatsage.exceptions import HudValidationError
+from greatsage.interface.formatting import format_dashboard, format_status
+from greatsage.interface.models import VALID_SECTIONS
+from greatsage.interface.service import HudService
 
 
 @dataclass

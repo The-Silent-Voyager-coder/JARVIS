@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.exceptions import ToolExecutionError
-from jarvis.tools.models import ToolContext
-from jarvis.tools.process_tools import ProcessInfoTool, ProcessListTool
+from greatsage.exceptions import ToolExecutionError
+from greatsage.tools.models import ToolContext
+from greatsage.tools.process_tools import ProcessInfoTool, ProcessListTool
 
 
 def make_context(tmp_path: Path) -> ToolContext:
@@ -50,14 +50,14 @@ def test_process_info_negative_pid_rejected(tmp_path: Path) -> None:
 
 
 def test_no_terminate_tool_exists() -> None:
-    from jarvis.tools.defaults import DEFAULT_TOOL_CLASSES
+    from greatsage.tools.defaults import DEFAULT_TOOL_CLASSES
 
     assert not any("terminate" in cls.id for cls in DEFAULT_TOOL_CLASSES)
     assert not any("kill" in cls.id for cls in DEFAULT_TOOL_CLASSES)
 
 
 def test_process_tools_declare_observational_capabilities() -> None:
-    from jarvis.tools.process_tools import ProcessInfoTool, ProcessListTool
+    from greatsage.tools.process_tools import ProcessInfoTool, ProcessListTool
 
     assert ProcessListTool.capabilities == ("inspect",)
     assert ProcessInfoTool.capabilities == ("inspect",)
@@ -65,6 +65,6 @@ def test_process_tools_declare_observational_capabilities() -> None:
 
 @pytest.mark.skipif(sys.platform != "win32", reason="tasklist is Windows-only")
 def test_process_list_uses_tasklist_without_shell(tmp_path: Path) -> None:
-    import jarvis.tools.process_tools as pt
+    import greatsage.tools.process_tools as pt
 
     pt._list_processes()  # noqa: SLF001 - smoke test for the real command

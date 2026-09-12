@@ -9,9 +9,9 @@ from typing import Any
 
 import pytest
 
-from jarvis.exceptions import MemoryUnavailableError, MemoryValidationError
-from jarvis.memory.embeddings import OllamaEmbeddingProvider, cosine_similarity
-from jarvis.memory.service import MemoryService
+from greatsage.exceptions import MemoryUnavailableError, MemoryValidationError
+from greatsage.memory.embeddings import OllamaEmbeddingProvider, cosine_similarity
+from greatsage.memory.service import MemoryService
 
 
 class _FakeResponse:
@@ -82,7 +82,7 @@ class _FakeProvider:
 def _service_with_embeddings(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, enabled: bool = True
 ) -> MemoryService:
-    from jarvis.configuration.loader import load_config
+    from greatsage.configuration.loader import load_config
 
     d = str(tmp_path).replace("\\", "/")
     cfg = tmp_path / "emb.yaml"
@@ -100,7 +100,7 @@ memory:
 """,
         encoding="utf-8",
     )
-    monkeypatch.setattr("jarvis.memory.service.OllamaEmbeddingProvider", _FakeProvider)
+    monkeypatch.setattr("greatsage.memory.service.OllamaEmbeddingProvider", _FakeProvider)
     service = MemoryService()
     service.start(load_config(cfg).config)
     return service

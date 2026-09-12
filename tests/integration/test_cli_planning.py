@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from jarvis.cli import EXIT_FAILURE, EXIT_INVALID, EXIT_OK, main
+from greatsage.cli import EXIT_FAILURE, EXIT_INVALID, EXIT_OK, main
 
 
 def write_cli_config(tmp_path: Path) -> Path:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from jarvis.intelligence.benchmark import (
+from greatsage.intelligence.benchmark import (
     BenchmarkResult,
     collect_cpu,
     collect_memory,
@@ -36,7 +36,7 @@ def test_run_benchmark_never_raises() -> None:
 
 
 def test_ollama_absence_reported() -> None:
-    from jarvis.intelligence.benchmark import collect_ollama
+    from greatsage.intelligence.benchmark import collect_ollama
 
     info = collect_ollama()
     assert "available" in info

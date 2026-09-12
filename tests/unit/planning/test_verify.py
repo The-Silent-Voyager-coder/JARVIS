@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.configuration.loader import load_config
-from jarvis.exceptions import PlanningValidationError
-from jarvis.planning.models import Plan, PlanStatus, Step
-from jarvis.planning.service import PlanningService
-from jarvis.planning.verify import verify_plan
+from greatsage.configuration.loader import load_config
+from greatsage.exceptions import PlanningValidationError
+from greatsage.planning.models import Plan, PlanStatus, Step
+from greatsage.planning.service import PlanningService
+from greatsage.planning.verify import verify_plan
 
 
 def step(sid: str, seq: int, tool: str, risk: str = "low", **kw: object) -> Step:

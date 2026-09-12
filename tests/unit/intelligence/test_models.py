@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.exceptions import ValidationError
-from jarvis.intelligence.models import (
+from greatsage.exceptions import ValidationError
+from greatsage.intelligence.models import (
     AIRequest,
     AIResponse,
     FinishReason,

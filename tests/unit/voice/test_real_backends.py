@@ -12,11 +12,11 @@ from pathlib import Path
 
 import pytest
 
-from jarvis.exceptions import VoiceValidationError
-from jarvis.voice.backends import piper_voice_paths, vosk_model_dir
-from jarvis.voice.stt import VoskSTTBackend, parse_wav_pcm
-from jarvis.voice.tts import PiperTTSBackend
-from jarvis.voice.wakeword import FuzzyWakeDetector
+from greatsage.exceptions import VoiceValidationError
+from greatsage.voice.backends import piper_voice_paths, vosk_model_dir
+from greatsage.voice.stt import VoskSTTBackend, parse_wav_pcm
+from greatsage.voice.tts import PiperTTSBackend
+from greatsage.voice.wakeword import FuzzyWakeDetector
 
 MODELS_DIR = Path("C:/JARVIS/models")
 
@@ -116,9 +116,9 @@ def test_piper_synthesis() -> None:
 def test_factories_reject_unknown_engines() -> None:
     import tempfile
 
-    from jarvis.configuration.loader import load_config
-    from jarvis.voice.backends import build_stt_manager, build_tts_manager, build_wake_detector
-    from jarvis.voice.limits import default_limits
+    from greatsage.configuration.loader import load_config
+    from greatsage.voice.backends import build_stt_manager, build_tts_manager, build_wake_detector
+    from greatsage.voice.limits import default_limits
 
     d = tempfile.mkdtemp().replace("\\", "/")
     path = Path(d) / "v.yaml"
@@ -146,9 +146,9 @@ core:
 def test_factories_build_known_engines() -> None:
     import tempfile
 
-    from jarvis.configuration.loader import load_config
-    from jarvis.voice.backends import build_stt_manager, build_tts_manager, build_wake_detector
-    from jarvis.voice.limits import default_limits
+    from greatsage.configuration.loader import load_config
+    from greatsage.voice.backends import build_stt_manager, build_tts_manager, build_wake_detector
+    from greatsage.voice.limits import default_limits
 
     d = tempfile.mkdtemp().replace("\\", "/")
     path = Path(d) / "v.yaml"

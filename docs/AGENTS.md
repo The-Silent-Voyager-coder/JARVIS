@@ -1,7 +1,7 @@
 # Agents
 
 > Phase 5A — the bounded agent tool loop. Contract for the agent subsystem
-> (`jarvis/agent/`) and the operating rules agents follow.
+> (`greatsage/agent/`) and the operating rules agents follow.
 
 ## 1. Authority Hierarchy
 
@@ -18,7 +18,7 @@ flow.**
   observe → repeat, bounded); the `AgentService` owns gating, limits,
   approval swap, memory retrieval, cancellation, and health.
 - Nothing in the loop is OpenCode-specific; OpenCode delegation lives in
-  the Phase 5B delegation layer (`jarvis/delegation/`) and is out of scope
+  the Phase 5B delegation layer (`greatsage/delegation/`) and is out of scope
   for the loop itself — the orchestrator never calls it directly.
 
 ## 2. State Machine

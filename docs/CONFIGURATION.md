@@ -74,17 +74,17 @@ C:\JARVIS\backups\      archives for Google Drive
 
 Phase 1 ships the complete loader, validator, and CLI:
 
-- **Loader** (`jarvis/configuration/loader.py`): deep-merges built-in defaults
+- **Loader** (`greatsage/configuration/loader.py`): deep-merges built-in defaults
   (`defaults.py`, mirroring `config/jarvis.example.yaml`) → YAML file (selected
   by `--config PATH` or `JARVIS_CONFIG_PATH`, else `config/jarvis.yaml` if
   present) → `JARVIS_*` environment variables → validates → freezes into typed
   records.
-- **Validation** (`jarvis/configuration/validation.py`): schema-driven; every
+- **Validation** (`greatsage/configuration/validation.py`): schema-driven; every
   problem is reported as `section.field = value, Expected: …`; unknown
   sections/fields, wrong types, bad enums, non-absolute paths, invalid
   http(s) URLs (port 1–65535), and missing provider fields are refused with
   `ConfigurationError` — no silent fallbacks, no secrets in messages.
-- **Typed config** (`jarvis/configuration/model.py`): frozen dataclasses
+- **Typed config** (`greatsage/configuration/model.py`): frozen dataclasses
   (`JarvisConfig` + per-section records, `SecurityMode`/`RiskLevel` StrEnums);
   raw dicts never escape the loader.
 - **Env vars**: only schema-documented keys are recognized
@@ -234,8 +234,8 @@ CLI: `jarvis tools list|info|health|execute [--config PATH] [--json]
 
 Rules:
 
-- Limits are validated with hard ceilings in `jarvis/configuration/validation.py`
-  (via `jarvis/agent/limits.py`); configuration above a ceiling is refused
+- Limits are validated with hard ceilings in `greatsage/configuration/validation.py`
+  (via `greatsage/agent/limits.py`); configuration above a ceiling is refused
   at startup.
 - Run-time overrides (`--max-steps`) are clamped: the smaller applicable
   limit wins (config or ceiling).
@@ -270,9 +270,9 @@ task:
 
 Rules:
 
-- Limits are validated with hard ceilings in `jarvis/configuration/
-  validation.py` (via `jarvis/workspace/limits.py`,
-  `jarvis/planning/limits.py`, `jarvis/task/limits.py`); configuration
+- Limits are validated with hard ceilings in `greatsage/configuration/
+  validation.py` (via `greatsage/workspace/limits.py`,
+  `greatsage/planning/limits.py`, `greatsage/task/limits.py`); configuration
   above a ceiling is refused at startup.
 - `enabled: false` gates the whole subsystem (healthy no-op in
   `jarvis health`; commands fail cleanly with an "unavailable" message).
@@ -289,7 +289,7 @@ Note: the Phase 6 voice pipeline adds a `voice:` section (wake_word / stt
 Vision (Phase 8) currently defines no `vision.*` config keys — its
 service is config-independent. Phase 7 (autonomy) and Phase 9 (security)
 add no new config sections by design: Phase 7 ships as
-`jarvis/planning/graph.py` + `verify.py` over the Phase 6 `planning:` /
+`greatsage/planning/graph.py` + `verify.py` over the Phase 6 `planning:` /
 `task:` blocks, and Phase 9 ships as `tools/redaction.py` + policy
 tightening under the existing `security:` / `tools:` blocks.
 
