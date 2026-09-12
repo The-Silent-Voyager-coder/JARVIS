@@ -98,8 +98,8 @@ Rules:
   declared path argument (absolute/relative/`~` expansion), denies paths
   outside `allowed_roots` or inside `denied_roots`, and denies access to
   protected files on **every** declared path argument (including
-  `shell.execute`'s `cwd`, Phase 9): `memory.db` (+ `-wal`/`-journal`/`-shm`
-  sidecars), `audit.log`, `jarvis.yaml`, `.env`, `.env.*`, `.envrc`, and any
+  `shell.execute`'s `cwd`, Phase 9): `sage-memory.db` (+ `-wal`/`-journal`/`-shm`
+  sidecars), `sage-audit.log`, `sage.yaml`, `.env`, `.env.*`, `.envrc`, and any
   path whose stem is `secret`/`token`/`credential`/`api_key`/`password`/
   `private_key`. Committed templates (`.env.example`, `.env.sample`,
   `.env.template`) stay readable. Directories are never treated as protected.
@@ -125,7 +125,7 @@ Rules:
 ## 5. Environment and Execution Bounds (`greatsage/tools/environment.py`)
 
 - `scrub_environment(environ)` removes J.A.R.V.I.S. secret variables
-  (`JARVIS_*_KEY`, `*_TOKEN`, `*_SECRET`, `*_PASSWORD`, `.env` markers) from
+  (`GREATSAGE_*_KEY`, `*_TOKEN`, `*_SECRET`, `*_PASSWORD`, `.env` markers) from
   the environment tools see. Secret-shaped keys are matched with a
   case-insensitive marker check (including plural forms like `credentials`).
 - `merge_environment(base, overrides)` rejects non-string values and
@@ -189,10 +189,10 @@ security:
   mode: normal                    # normal | lockdown | development
   allow_auto_approve_read: true   # auto-approve `low` risk (default true)
 tools:
-  working_directory: C:/JARVIS/workspaces   # explicit cwd for every tool
+  working_directory: C:/GREATSAGE/workspaces   # explicit cwd for every tool
   execution_timeout_seconds: 30.0
   max_output_bytes: 65536
-  allowed_roots: [C:/JARVIS/workspaces]     # path checks apply here
+  allowed_roots: [C:/GREATSAGE/workspaces]     # path checks apply here
   denied_roots: []                          # explicit denials win
   terminal:
     default_risk: LOW_WRITE                 # base risk for shell.execute
@@ -201,7 +201,7 @@ tools:
 ```
 
 Environment overrides use the double-underscore convention, e.g.
-`JARVIS_TOOLS__ALLOWED_ROOTS`, `JARVIS_SECURITY__MODE`.
+`GREATSAGE_TOOLS__ALLOWED_ROOTS`, `GREATSAGE_SECURITY__MODE`.
 
 ## 9. CLI (`jarvis tools`)
 

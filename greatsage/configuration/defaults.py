@@ -10,13 +10,13 @@ from __future__ import annotations
 DEFAULTS: dict[str, object] = {
     "core": {
         "name": "J.A.R.V.I.S.",
-        "data_dir": "C:/JARVIS/data",
-        "cache_dir": "C:/JARVIS/cache",
-        "logs_dir": "C:/JARVIS/logs",
-        "runtime_dir": "C:/JARVIS/runtime",
-        "workspaces_dir": "C:/JARVIS/workspaces",
-        "models_dir": "C:/JARVIS/models",
-        "backups_dir": "C:/JARVIS/backups",
+        "data_dir": "C:/GREATSAGE/data",
+        "cache_dir": "C:/GREATSAGE/cache",
+        "logs_dir": "C:/GREATSAGE/logs",
+        "runtime_dir": "C:/GREATSAGE/runtime",
+        "workspaces_dir": "C:/GREATSAGE/workspaces",
+        "models_dir": "C:/GREATSAGE/models",
+        "backups_dir": "C:/GREATSAGE/backups",
         "timezone": "Asia/Kolkata",
     },
     "logging": {
@@ -50,7 +50,7 @@ DEFAULTS: dict[str, object] = {
     },
     "memory": {
         "enabled": True,
-        "database_path": "C:/JARVIS/data/memory.db",
+        "database_path": "C:/GREATSAGE/data/sage-memory.db",
         "auto_save_conversations": False,
         "default_confidence": 0.8,
         "retention_days": 365,
@@ -64,10 +64,10 @@ DEFAULTS: dict[str, object] = {
         "persist_interval_seconds": 5,
     },
     "tools": {
-        "working_directory": "C:/JARVIS/workspaces",
+        "working_directory": "C:/GREATSAGE/workspaces",
         "execution_timeout_seconds": 30.0,
         "max_output_bytes": 65536,
-        "allowed_roots": ["C:/JARVIS/workspaces"],
+        "allowed_roots": ["C:/GREATSAGE/workspaces"],
         "denied_roots": [],
         "terminal": {"default_risk": "LOW_WRITE"},
         "browser": {"default_risk": "READ"},
@@ -95,24 +95,24 @@ DEFAULTS: dict[str, object] = {
         "max_scan_depth": 3,
         "max_entries": 500,
         "scan_timeout_seconds": 10.0,
-        "database_path": "C:/JARVIS/data/workspace.db",
+        "database_path": "C:/GREATSAGE/data/sage-workspace.db",
     },
     "planning": {
         "enabled": True,
         "max_plan_steps": 25,
-        "database_path": "C:/JARVIS/data/plans.db",
+        "database_path": "C:/GREATSAGE/data/sage-plans.db",
     },
     "task": {
         "enabled": True,
         "max_steps": 25,
         "per_step_timeout_seconds": 30.0,
         "total_timeout_seconds": 600.0,
-        "database_path": "C:/JARVIS/data/tasks.db",
+        "database_path": "C:/GREATSAGE/data/sage-tasks.db",
     },
     "scheduler": {
         "enabled": True,
         "max_schedules": 50,
-        "database_path": "C:/JARVIS/data/scheduler.db",
+        "database_path": "C:/GREATSAGE/data/sage-scheduler.db",
     },
     "telegram": {
         "enabled": False,
@@ -126,7 +126,7 @@ DEFAULTS: dict[str, object] = {
         "default_mode": "ask",
         "allow_auto_approve_read": True,
         "destructive_confirm": True,
-        "audit_log": "C:/JARVIS/data/audit.log",
+        "audit_log": "C:/GREATSAGE/data/sage-audit.log",
     },
     "voice": {
         # Deterministic mocks by default (offline, no downloads). Real local

@@ -24,7 +24,7 @@ Please include:
 - Affected component (`jarvis/tools`, `jarvis/agent`, `jarvis/delegation`, etc.)
 - Steps to reproduce
 - Impact assessment (what an attacker could do, what is protected)
-- Whether the issue is in a default configuration or requires custom `config/jarvis.yaml`
+- Whether the issue is in a default configuration or requires custom `config/sage.yaml`
 
 ## What to Expect
 
@@ -47,7 +47,7 @@ See also `docs/TOOLS.md`, `docs/AGENTS.md`, `docs/CONFIGURATION.md`.
 ## Scope Clarifications
 
 - Do **not** report missing `LICENSE`/`SECURITY.md` (already addressed).
-- Do **not** use `C:\JARVIS\` defaults as a finding — they are intentional documented defaults (`config/jarvis.example.yaml`, `jarvis/configuration/defaults.py`).
+- Do **not** use `C:\GREATSAGE\` defaults as a finding — they are intentional documented defaults (`config/sage.example.yaml`, `jarvis/configuration/defaults.py`).
 - Test fakes (`tests/`) using `sk-test` or placeholder tokens are not real credentials.
 
 ## No Secrets in the Repository

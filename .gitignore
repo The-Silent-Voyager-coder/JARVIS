@@ -42,7 +42,7 @@ models/
 *.pfx
 
 # --- Local configuration (real config, not example) ---
-config/jarvis.yaml
+config/sage.yaml
 config/*.local.yaml
 
 # --- Local workspaces (may contain large projects) ---

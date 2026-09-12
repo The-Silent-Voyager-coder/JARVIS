@@ -174,9 +174,9 @@ def test_coerce_env_types() -> None:
 
 def test_apply_env_recognized_only() -> None:
     raw = {"logging": {"level": "INFO"}}
-    apply_env(raw, {"JARVIS_LOGGING__LEVEL": "ERROR", "JARVIS_UNRELATED__X": "1"})
+    apply_env(raw, {"GREATSAGE_LOGGING__LEVEL": "ERROR", "GREATSAGE_UNRELATED__X": "1"})
     assert raw["logging"]["level"] == "ERROR"
 
     raw2 = {"ai": {"providers": {"opencode": {"base_url": "http://127.0.0.1:4096"}}}}
-    apply_env(raw2, {"JARVIS_AI__PROVIDERS__OPENCODE__BASE_URL": "http://127.0.0.1:7777"})
+    apply_env(raw2, {"GREATSAGE_AI__PROVIDERS__OPENCODE__BASE_URL": "http://127.0.0.1:7777"})
     assert raw2["ai"]["providers"]["opencode"]["base_url"] == "http://127.0.0.1:7777"

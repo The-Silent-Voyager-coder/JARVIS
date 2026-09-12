@@ -248,6 +248,6 @@ Coverage:
   `tests/unit/voice/test_real_backends.py` (Vosk/Piper guarded by
   availability skips — CI-safe).
 - Hermeticity rule (learned the hard way): no test may depend on the
-  operator-owned `config/jarvis.yaml` existing or not —
+  operator-owned `config/sage.yaml` existing or not —
   `test_defaults_load_without_file` and `test_config_validate_defaults`
   pin `DEFAULT_CONFIG_PATH` at a nonexistent path.

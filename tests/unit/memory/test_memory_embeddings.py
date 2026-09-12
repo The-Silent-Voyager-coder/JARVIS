@@ -90,7 +90,7 @@ def _service_with_embeddings(
         f"""
 memory:
   enabled: true
-  database_path: "{d}/memory.db"
+  database_path: "{d}/sage-memory.db"
   auto_save_conversations: false
   default_confidence: 0.8
   retention_days: 365

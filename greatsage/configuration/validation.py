@@ -685,7 +685,7 @@ def coerce_env(kind: Kind, raw: str) -> Any:
 def env_key_map() -> dict[str, str]:
     """Map documented environment variables to dotted schema paths.
 
-    Only keys present in the schema are recognized; unknown JARVIS_* keys are
+    Only keys present in the schema are recognized; unknown GREATSAGE_* keys are
     ignored (they may belong to other tooling).
     """
     mapping: dict[str, str] = {}
@@ -693,10 +693,10 @@ def env_key_map() -> dict[str, str]:
         for name in fields:
             if name in ("providers", "terminal", "browser", "wake_word", "stt", "tts"):
                 continue
-            mapping[f"JARVIS_{section.upper()}__{name.upper()}"] = f"{section}.{name}"
+            mapping[f"GREATSAGE_{section.upper()}__{name.upper()}"] = f"{section}.{name}"
     for provider in PROVIDER_NAMES:
         for name in PROVIDER_FIELDS[provider]:
-            mapping[f"JARVIS_AI__PROVIDERS__{provider.upper()}__{name.upper()}"] = (
+            mapping[f"GREATSAGE_AI__PROVIDERS__{provider.upper()}__{name.upper()}"] = (
                 f"ai.providers.{provider}.{name}"
             )
     return mapping

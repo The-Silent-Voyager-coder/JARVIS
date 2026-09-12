@@ -6,7 +6,7 @@
   endpoint, voice engines, permissions, storage locations, resource limits —
   all come from configuration.
 - **Validated.** Invalid configuration refuses startup; no silent fallbacks.
-- **Layered.** Defaults → config file (`config/jarvis.yaml`) → environment
+- **Layered.** Defaults → config file (`config/sage.yaml`) → environment
   variables → CLI overrides. Later layers win.
 - **Secrets in env, never in files.** API keys/tokens live in `.env`
   (git-ignored) or the process environment. Never in YAML, never in source.
@@ -16,14 +16,14 @@
 | Layer | Location | Use |
 |---|---|---|
 | 1. Built-in defaults | `configuration/` package | sane minimums |
-| 2. User config | `config/jarvis.yaml` (copy of `jarvis.example.yaml`) | normal settings |
-| 3. Environment | `JARVIS_*` variables, `.env` file | machine-specific + secrets |
-| 4. CLI flags | `jarvis --...` | per-run overrides |
+| 2. User config | `config/sage.yaml` (copy of `sage.example.yaml`) | normal settings |
+| 3. Environment | `GREATSAGE_*` variables, `.env` file | machine-specific + secrets |
+| 4. CLI flags | `greatsage --...` | per-run overrides |
 
 Convention: env var for config key `security.default_mode` is
-`JARVIS_SECURITY__DEFAULT_MODE` (double underscore = nesting).
+`GREATSAGE_SECURITY__DEFAULT_MODE` (double underscore = nesting).
 
-## 3. Schema (authoritative — `config/jarvis.example.yaml`)
+## 3. Schema (authoritative — `config/sage.example.yaml`)
 
 Top-level sections:
 
@@ -58,16 +58,16 @@ Unknown keys or invalid values → validation errors at startup.
 
 ## 5. Default Paths
 
-Defaults assume `C:\JARVIS\` as the data root (config override supported):
+Defaults assume `C:\GREATSAGE\` as the data root (config override supported):
 
 ```text
-C:\JARVIS\data\         SQLite DBs (memory, tasks), audit log
-C:\JARVIS\models\       local models (Ollama files, whisper, piper voices)
-C:\JARVIS\workspaces\   active dev workspaces
-C:\JARVIS\cache\        transient caches
-C:\JARVIS\logs\         structured logs
-C:\JARVIS\runtime\      pid/socket/ephemeral
-C:\JARVIS\backups\      archives for Google Drive
+C:\GREATSAGE\data\         SQLite DBs (memory, tasks), audit log
+C:\GREATSAGE\models\       local models (Ollama files, whisper, piper voices)
+C:\GREATSAGE\workspaces\   active dev workspaces
+C:\GREATSAGE\cache\        transient caches
+C:\GREATSAGE\logs\         structured logs
+C:\GREATSAGE\runtime\      pid/socket/ephemeral
+C:\GREATSAGE\backups\      archives for Google Drive
 ```
 
 ## 6. Implementation Notes (Phase 1)
@@ -75,9 +75,9 @@ C:\JARVIS\backups\      archives for Google Drive
 Phase 1 ships the complete loader, validator, and CLI:
 
 - **Loader** (`greatsage/configuration/loader.py`): deep-merges built-in defaults
-  (`defaults.py`, mirroring `config/jarvis.example.yaml`) → YAML file (selected
-  by `--config PATH` or `JARVIS_CONFIG_PATH`, else `config/jarvis.yaml` if
-  present) → `JARVIS_*` environment variables → validates → freezes into typed
+  (`defaults.py`, mirroring `config/sage.example.yaml`) → YAML file (selected
+  by `--config PATH` or `GREATSAGE_CONFIG_PATH`, else `config/sage.yaml` if
+  present) → `GREATSAGE_*` environment variables → validates → freezes into typed
   records.
 - **Validation** (`greatsage/configuration/validation.py`): schema-driven; every
   problem is reported as `section.field = value, Expected: …`; unknown
@@ -88,8 +88,8 @@ Phase 1 ships the complete loader, validator, and CLI:
   (`JarvisConfig` + per-section records, `SecurityMode`/`RiskLevel` StrEnums);
   raw dicts never escape the loader.
 - **Env vars**: only schema-documented keys are recognized
-  (`JARVIS_SECTION__FIELD`, `JARVIS_AI__PROVIDERS__<NAME>__<FIELD>`);
-  unknown `JARVIS_*` keys are ignored, and unparseable values fail with a
+  (`GREATSAGE_SECTION__FIELD`, `GREATSAGE_AI__PROVIDERS__<NAME>__<FIELD>`);
+  unknown `GREATSAGE_*` keys are ignored, and unparseable values fail with a
   `ConfigurationError` naming the variable.
 - **CLI**: `jarvis config validate [--config PATH]` prints `Configuration
   valid.` + `Source:` (resolved path or `built-in defaults`), exits `0`/`2`.
@@ -129,7 +129,7 @@ Semantics:
 - `model` is the default model hint for the provider; the provider decides
   when empty (`/api/tags` for Ollama) and the router drops providers whose
   advertised models exclude an explicit request model.
-- The default config (`config/jarvis.example.yaml`, `configuration/defaults.py`)
+- The default config (`config/sage.example.yaml`, `configuration/defaults.py`)
   enables the local provider only; opencode is disabled until the operator
   flips it on. A missing `ai:` section is valid — defaults apply.
 - `default_provider` is a fallback, not a pin: explicit request metadata
@@ -147,7 +147,7 @@ The `memory.*` schema drives the memory subsystem (`jarvis.memory`):
 ```yaml
 memory:
   enabled: true                          # false → subsystem disabled (health: healthy no-op)
-  database_path: C:/JARVIS/data/memory.db
+  database_path: C:/GREATSAGE/data/sage-memory.db
   auto_save_conversations: false         # ALWAYS false in Phase 3 (privacy rule)
   default_confidence: 0.8                # 0.0..1.0 when remember() omits confidence
   retention_days: 365                    # default expiry for working/episodic entries
@@ -171,8 +171,8 @@ Semantics:
   memories are persistent unless an explicit expiration is given.
 
 Environment overrides use the double-underscore convention:
-`JARVIS_MEMORY__DATABASE_PATH`, `JARVIS_MEMORY__DEFAULT_CONFIDENCE`,
-`JARVIS_MEMORY__RETENTION_DAYS`.
+`GREATSAGE_MEMORY__DATABASE_PATH`, `GREATSAGE_MEMORY__DEFAULT_CONFIDENCE`,
+`GREATSAGE_MEMORY__RETENTION_DAYS`.
 
 CLI: `jarvis memory health|stats|list|get|delete|search [--config PATH]
 [--json]`. `memory health` exits `1` when the subsystem is unavailable
@@ -187,10 +187,10 @@ security:
   mode: normal                        # normal | lockdown | development
   allow_auto_approve_read: true       # development mode: `low` risk allowed
 tools:
-  working_directory: C:/JARVIS/workspaces   # explicit cwd for every tool
+  working_directory: C:/GREATSAGE/workspaces   # explicit cwd for every tool
   execution_timeout_seconds: 30.0           # per-run subprocess timeout
   max_output_bytes: 65536                   # output truncation bound
-  allowed_roots: [C:/JARVIS/workspaces]     # path policy applies here
+  allowed_roots: [C:/GREATSAGE/workspaces]     # path policy applies here
   denied_roots: []                          # explicit denials win
   terminal:
     default_risk: LOW_WRITE                 # base risk for shell.execute
@@ -215,8 +215,8 @@ Semantics:
   (the shell classifier can only raise it).
 
 Environment overrides use the double-underscore convention:
-`JARVIS_SECURITY__MODE`, `JARVIS_TOOLS__ALLOWED_ROOTS`,
-`JARVIS_TOOLS__EXECUTION_TIMEOUT_SECONDS`.
+`GREATSAGE_SECURITY__MODE`, `GREATSAGE_TOOLS__ALLOWED_ROOTS`,
+`GREATSAGE_TOOLS__EXECUTION_TIMEOUT_SECONDS`.
 
 CLI: `jarvis tools list|info|health|execute [--config PATH] [--json]
 [--approve]`. See `docs/TOOLS.md` for the full tool-system contract.
@@ -242,8 +242,8 @@ Rules:
 - `--max-steps N` on `jarvis agent run` overrides the configured step limit
   for that run only, still clamped to the ceiling.
 
-Environment override convention: `JARVIS_AGENT__MAX_STEPS`,
-`JARVIS_AGENT__ENABLED`.
+Environment override convention: `GREATSAGE_AGENT__MAX_STEPS`,
+`GREATSAGE_AGENT__ENABLED`.
 
 CLI: `jarvis agent health|run [--config PATH] [--json]`. See
 `docs/AGENTS.md` for the full agent-system contract.
@@ -255,17 +255,17 @@ workspace:
   max_scan_depth: 3
   max_entries: 500
   scan_timeout_seconds: 10.0
-  database_path: C:/JARVIS/data/workspace.db
+  database_path: C:/GREATSAGE/data/sage-workspace.db
 planning:
   enabled: true
   max_plan_steps: 25
-  database_path: C:/JARVIS/data/plans.db
+  database_path: C:/GREATSAGE/data/sage-plans.db
 task:
   enabled: true
   max_steps: 25
   per_step_timeout_seconds: 30.0
   total_timeout_seconds: 600.0
-  database_path: C:/JARVIS/data/tasks.db
+  database_path: C:/GREATSAGE/data/sage-tasks.db
 ```
 
 Rules:
@@ -277,15 +277,15 @@ Rules:
 - `enabled: false` gates the whole subsystem (healthy no-op in
   `jarvis health`; commands fail cleanly with an "unavailable" message).
 
-Environment override convention: `JARVIS_WORKSPACE__MAX_ENTRIES`,
-`JARVIS_PLANNING__MAX_PLAN_STEPS`, `JARVIS_TASK__MAX_STEPS`.
+Environment override convention: `GREATSAGE_WORKSPACE__MAX_ENTRIES`,
+`GREATSAGE_PLANNING__MAX_PLAN_STEPS`, `GREATSAGE_TASK__MAX_STEPS`.
 
 CLI: `jarvis workspace scan|info|health`, `jarvis planning
 create|get|list|health`, `jarvis task run|resume|list|get|cancel|health`
 (see `docs/INTERFACES.md` §12).
 
 Note: the Phase 6 voice pipeline adds a `voice:` section (wake_word / stt
-/ tts engine + model selections, see `config/jarvis.example.yaml`).
+/ tts engine + model selections, see `config/sage.example.yaml`).
 Vision (Phase 8) currently defines no `vision.*` config keys — its
 service is config-independent. Phase 7 (autonomy) and Phase 9 (security)
 add no new config sections by design: Phase 7 ships as
@@ -299,7 +299,7 @@ tightening under the existing `security:` / `tools:` blocks.
 scheduler:
   enabled: true
   max_schedules: 50          # ceiling 200, refused above it
-  database_path: C:/JARVIS/data/scheduler.db
+  database_path: C:/GREATSAGE/data/sage-scheduler.db
 telegram:
   enabled: false             # flip on after BotFather + allowlist (see below)
   token_env: "TELEGRAM_BOT_TOKEN"

@@ -116,7 +116,7 @@ logging:
   retention_days: 1
 memory:
   enabled: false
-  database_path: "{d}/data/memory.db"
+  database_path: "{d}/data/sage-memory.db"
   auto_save_conversations: false
   default_confidence: 0.8
   retention_days: 365
@@ -134,7 +134,7 @@ scheduler:
   database_path: "{d}/data/scheduler.db"
 telegram:
   enabled: {"true" if enabled else "false"}
-  token_env: "JARVIS_TEST_TELEGRAM_TOKEN"
+  token_env: "GREATSAGE_TEST_TELEGRAM_TOKEN"
   allowed_chat_ids: [{", ".join(str(c) for c in allowed)}]
   poll_timeout_seconds: 1
   max_listen_seconds: 60
@@ -149,11 +149,11 @@ def test_service_requires_token_and_chats(
 ) -> None:
     from greatsage.configuration.loader import load_config
 
-    monkeypatch.delenv("JARVIS_TEST_TELEGRAM_TOKEN", raising=False)
+    monkeypatch.delenv("GREATSAGE_TEST_TELEGRAM_TOKEN", raising=False)
     service = TelegramService()
     service.start(load_config(_telegram_config(tmp_path)).config)
     assert service.health()["status"] == "unavailable"
-    assert "JARVIS_TEST_TELEGRAM_TOKEN" in service.health()["detail"]
+    assert "GREATSAGE_TEST_TELEGRAM_TOKEN" in service.health()["detail"]
     service.shutdown()
 
 
@@ -162,7 +162,7 @@ def test_listen_once_replies_allowlisted(
 ) -> None:
     from greatsage.configuration.loader import load_config
 
-    monkeypatch.setenv("JARVIS_TEST_TELEGRAM_TOKEN", "test-token")
+    monkeypatch.setenv("GREATSAGE_TEST_TELEGRAM_TOKEN", "test-token")
     service = TelegramService()
     service.start(load_config(_telegram_config(tmp_path)).config)
     assert service.health()["available"] is True
@@ -226,7 +226,7 @@ def test_listen_sends_photo_reply(
 ) -> None:
     from greatsage.configuration.loader import load_config
 
-    monkeypatch.setenv("JARVIS_TEST_TELEGRAM_TOKEN", "test-token")
+    monkeypatch.setenv("GREATSAGE_TEST_TELEGRAM_TOKEN", "test-token")
     service = TelegramService()
     service.start(load_config(_telegram_config(tmp_path)).config)
     photos: list[bytes] = []

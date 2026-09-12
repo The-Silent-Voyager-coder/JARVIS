@@ -4,13 +4,13 @@
 
 core:
   name: "J.A.R.V.I.S."
-  data_dir: "C:/JARVIS/data"
-  cache_dir: "C:/JARVIS/cache"
-  logs_dir: "C:/JARVIS/logs"
-  runtime_dir: "C:/JARVIS/runtime"
-  workspaces_dir: "C:/JARVIS/workspaces"
-  models_dir: "C:/JARVIS/models"
-  backups_dir: "C:/JARVIS/backups"
+  data_dir: "C:/GREATSAGE/data"
+  cache_dir: "C:/GREATSAGE/cache"
+  logs_dir: "C:/GREATSAGE/logs"
+  runtime_dir: "C:/GREATSAGE/runtime"
+  workspaces_dir: "C:/GREATSAGE/workspaces"
+  models_dir: "C:/GREATSAGE/models"
+  backups_dir: "C:/GREATSAGE/backups"
   timezone: "Asia/Kolkata"
 
 logging:
@@ -47,7 +47,7 @@ ai:
 
 memory:
   enabled: true
-  database_path: "C:/JARVIS/data/memory.db"
+  database_path: "C:/GREATSAGE/data/sage-memory.db"
   auto_save_conversations: false
   default_confidence: 0.8
   retention_days: 365
@@ -66,14 +66,14 @@ tasks:
 
 tools:
   # Explicit working directory for tool execution (never arbitrary CWD).
-  working_directory: "C:/JARVIS/workspaces"
+  working_directory: "C:/GREATSAGE/workspaces"
   # Every tool execution must complete within this timeout.
   execution_timeout_seconds: 30
   # Cap on output (bytes) captured per tool execution.
   max_output_bytes: 65536
   # Roots tools may touch. Paths are canonicalized; traversal is blocked.
   allowed_roots:
-    - "C:/JARVIS/workspaces"
+    - "C:/GREATSAGE/workspaces"
   denied_roots: []
   terminal:
     default_risk: "LOW_WRITE"
@@ -122,13 +122,13 @@ workspace:
   max_scan_depth: 3
   max_entries: 500
   scan_timeout_seconds: 10
-  database_path: "C:/JARVIS/data/workspace.db"
+  database_path: "C:/GREATSAGE/data/sage-workspace.db"
 
 planning:
   # Deterministic plan decomposition (Phase 6) — no AI provider calls.
   enabled: true
   max_plan_steps: 25
-  database_path: "C:/JARVIS/data/plans.db"
+  database_path: "C:/GREATSAGE/data/sage-plans.db"
 
 task:
   # Bounded multi-step execution over the secure tool pipeline (Phase 6).
@@ -136,14 +136,14 @@ task:
   max_steps: 25
   per_step_timeout_seconds: 30
   total_timeout_seconds: 600
-  database_path: "C:/JARVIS/data/tasks.db"
+  database_path: "C:/GREATSAGE/data/sage-tasks.db"
 
 scheduler:
   # Bounded recurring jobs (roadmap Phase C) — tick via `jarvis schedule tick`
   # (directly or from Windows Task Scheduler). No daemon.
   enabled: true
   max_schedules: 50
-  database_path: "C:/JARVIS/data/scheduler.db"
+  database_path: "C:/GREATSAGE/data/sage-scheduler.db"
 
 telegram:
   # Remote chat: message the bot from anywhere; the laptop stays home online.
@@ -165,7 +165,7 @@ security:
   default_mode: "ask"
   allow_auto_approve_read: true
   destructive_confirm: true
-  audit_log: "C:/JARVIS/data/audit.log"
+  audit_log: "C:/GREATSAGE/data/sage-audit.log"
 
 voice:
   # Mocks by default (deterministic, no downloads). Real local engines:

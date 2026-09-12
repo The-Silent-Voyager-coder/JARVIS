@@ -13,7 +13,7 @@ from greatsage.exceptions import ConfigurationError
 
 
 def test_defaults_load_without_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.delenv("JARVIS_CONFIG_PATH", raising=False)
+    monkeypatch.delenv("GREATSAGE_CONFIG_PATH", raising=False)
     # Hermetic against an operator-owned config/jarvis.yaml (documented setup
     # step): point the repo-root probe at a path that cannot exist.
     monkeypatch.setattr(
@@ -89,35 +89,35 @@ def test_unknown_section_fails(tmp_path: Path) -> None:
 
 
 def test_environment_override(valid_config_yaml: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("JARVIS_EVENTS__QUEUE_MAXSIZE", "42")
+    monkeypatch.setenv("GREATSAGE_EVENTS__QUEUE_MAXSIZE", "42")
     loaded = load_config(valid_config_yaml)
     assert loaded.config.events.queue_maxsize == 42
 
 
 def test_environment_beats_yaml(valid_config_yaml: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("JARVIS_LOGGING__LEVEL", "WARNING")
+    monkeypatch.setenv("GREATSAGE_LOGGING__LEVEL", "WARNING")
     loaded = load_config(valid_config_yaml)
     assert loaded.config.logging.level == "WARNING"
     assert loaded.config.core.name == "J.A.R.V.I.S. Test"  # yaml still applies elsewhere
 
 
 def test_environment_beats_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("JARVIS_CONFIG_PATH", raising=False)
-    monkeypatch.setenv("JARVIS_SECURITY__DEFAULT_MODE", "deny")
+    monkeypatch.delenv("GREATSAGE_CONFIG_PATH", raising=False)
+    monkeypatch.setenv("GREATSAGE_SECURITY__DEFAULT_MODE", "deny")
     loaded = load_config()
     assert loaded.config.security.default_mode is SecurityMode.DENY
 
 
 def test_bad_environment_bool_fails(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("JARVIS_SECURITY__ALLOW_AUTO_APPROVE_READ", "maybe")
-    with pytest.raises(ConfigurationError, match="JARVIS_SECURITY__ALLOW_AUTO_APPROVE_READ"):
+    monkeypatch.setenv("GREATSAGE_SECURITY__ALLOW_AUTO_APPROVE_READ", "maybe")
+    with pytest.raises(ConfigurationError, match="GREATSAGE_SECURITY__ALLOW_AUTO_APPROVE_READ"):
         load_config()
 
 
 def test_secrets_never_logged(
     valid_config_yaml: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    monkeypatch.setenv("JARVIS_AI__PROVIDERS__OPENCODE__BASE_URL", "http://user:hunter2@127.0.0.1:4096")
+    monkeypatch.setenv("GREATSAGE_AI__PROVIDERS__OPENCODE__BASE_URL", "http://user:hunter2@127.0.0.1:4096")
     with caplog.at_level(logging.DEBUG):
         loaded = load_config(valid_config_yaml)
     assert loaded.config.ai.opencode.base_url == "http://user:hunter2@127.0.0.1:4096"

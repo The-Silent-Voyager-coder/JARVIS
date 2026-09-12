@@ -93,7 +93,7 @@ verifies results before claiming success.
 | `workspace/` | Workspace discovery, scanner, persistence | 6 |
 | `planning/` | Deterministic plan decomposition + task-graph DAG + verification gate (no AI calls) | 6/7 |
 | `task/` | Bounded multi-step execution over the tool pipeline | 6 |
-| `voice/` | Wake word, STT, TTS local-first pipeline (mock default; Vosk/Piper/fuzzy opt-in, models under `C:/JARVIS/models`) | 6 + roadmap A |
+| `voice/` | Wake word, STT, TTS local-first pipeline (mock default; Vosk/Piper/fuzzy opt-in, models under `C:/GREATSAGE/models`) | 6 + roadmap A |
 | `memory/` | … + local embeddings (Ollama `nomic-embed-text`, `memory_embeddings` table, semantic recall) | 3 + roadmap B |
 | `scheduler/` | SQLite-backed recurring jobs (`briefing`/`tool` kinds, bounded `tick`, no daemon) | roadmap C |
 | `telegram/` | Remote chat bridge (Bot API long-poll, allowlisted chats, bounded listen) | roadmap C |
@@ -632,7 +632,7 @@ bus. `greatsage/events/bus.py` implements `EventBus`:
 ## 7. Storage Layout (Windows)
 
 ```text
-C:\JARVIS\
+C:\GREATSAGE\
 ├── app\          → installed code (repo)
 ├── data\         → SQLite DBs, task state, memory
 ├── models\       → local model files (STT/TTS/embeddings)
@@ -643,7 +643,7 @@ C:\JARVIS\
 └── runtime\      → PID files, sockets, ephemeral state
 ```
 
-Host platform names (`C:\JARVIS`) are **defaults in config**, never hard-coded.
+Host platform names (`C:\GREATSAGE`) are **defaults in config**, never hard-coded.
 
 ### Google Drive
 

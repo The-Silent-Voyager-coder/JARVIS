@@ -36,7 +36,7 @@ logging:
   retention_days: 7
 memory:
   enabled: true
-  database_path: "{d}/data/memory.db"
+  database_path: "{d}/data/sage-memory.db"
   auto_save_conversations: false
   default_confidence: 0.8
   retention_days: 365
@@ -53,27 +53,27 @@ workspace:
   max_scan_depth: 3
   max_entries: 500
   scan_timeout_seconds: 10.0
-  database_path: "{d}/data/workspace.db"
+  database_path: "{d}/data/sage-workspace.db"
 planning:
   enabled: true
   max_plan_steps: 25
-  database_path: "{d}/data/plans.db"
+  database_path: "{d}/data/sage-plans.db"
 task:
   enabled: true
   max_steps: 25
   per_step_timeout_seconds: 30.0
   total_timeout_seconds: 600.0
-  database_path: "{d}/data/tasks.db"
+  database_path: "{d}/data/sage-tasks.db"
 scheduler:
   enabled: true
   max_schedules: 50
-  database_path: "{d}/data/scheduler.db"
+  database_path: "{d}/data/sage-scheduler.db"
 security:
   mode: "normal"
   default_mode: "ask"
   allow_auto_approve_read: true
   destructive_confirm: true
-  audit_log: "{d}/data/audit.log"
+  audit_log: "{d}/data/sage-audit.log"
 """,
         encoding="utf-8",
     )

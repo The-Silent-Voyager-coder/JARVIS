@@ -53,7 +53,7 @@ Implementation notes:
 ```text
 1. Detect: task needs substantial coding  (planner heuristic: multi-file edits,
    build/test cycles, project-level changes)
-2. Identify workspace: existing project under C:\JARVIS\workspaces\ or new repo
+2. Identify workspace: existing project under C:\GREATSAGE\workspaces\ or new repo
 3. Create/reuse OpenCode session for that project root
 4. Provide structured task spec: objective, constraints, files, acceptance
    criteria, forbidden actions — one message

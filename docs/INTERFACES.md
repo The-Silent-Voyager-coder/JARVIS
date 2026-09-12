@@ -71,7 +71,7 @@ Future providers: registration via config (type + factory), no core changes.
 `intelligence/` exposes a router that selects a provider per request based on
 configurable criteria: task class (coding vs reasoning vs quick reply),
 provider health, availability, resource budget. Routes are config-driven
-(`config/jarvis.example.yaml → ai`), never hard-coded in core.
+(`config/sage.example.yaml → ai`), never hard-coded in core.
 
 ### Phase 2 implementation (`greatsage/intelligence/`)
 
@@ -263,9 +263,9 @@ load_config(config_path: str | Path | None = None,
 # LoadedConfig(config: JarvisConfig, source: str, config_path: Path | None)
 ```
 
-- Precedence (low → high): built-in defaults → YAML file → `JARVIS_*`
+- Precedence (low → high): built-in defaults → YAML file → `GREATSAGE_*`
   environment variables. CLI `--config PATH` selects the file; env
-  `JARVIS_CONFIG_PATH` also selects it; otherwise `config/jarvis.yaml` in the
+  `GREATSAGE_CONFIG_PATH` also selects it; otherwise `config/sage.yaml` in the
   repo root is used if present.
 - `JarvisConfig` (frozen dataclasses: `core, logging, events, ai, memory,
   tasks, tools, security, voice`) is typed and immutable — raw dicts are
@@ -273,9 +273,9 @@ load_config(config_path: str | Path | None = None,
 - `validate(raw)` reports every schema problem as
   `ConfigProblem(section, field, value, expected)`; missing provider fields,
   unknown fields/sections, wrong types, and out-of-range values are all
-  refused. `apply_env` only recognizes schema-documented `JARVIS_SECTION__FIELD`
-  variables (double underscore), e.g. `JARVIS_LOGGING__LEVEL`,
-  `JARVIS_AI__PROVIDERS__OPENCODE__BASE_URL`, `JARVIS_SECURITY__DEFAULT_MODE`.
+  refused. `apply_env` only recognizes schema-documented `GREATSAGE_SECTION__FIELD`
+  variables (double underscore), e.g. `GREATSAGE_LOGGING__LEVEL`,
+  `GREATSAGE_AI__PROVIDERS__OPENCODE__BASE_URL`, `GREATSAGE_SECURITY__DEFAULT_MODE`.
 - Invalid configuration raises `ConfigurationError`; the CLI never starts the
   runtime on invalid config and never logs secret values.
 

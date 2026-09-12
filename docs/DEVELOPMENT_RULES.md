@@ -17,7 +17,7 @@ this repository. They are the Phase 0 founding contract.
    (see `docs/CONFIGURATION.md` §4). A leaked key = incident.
 6. **No hard-coded user-specific absolute paths** — `C:\Users\ASUS\...` never
    appears in code or config that ships; everything goes through `core.*`
-   config keys with defaults under `C:\JARVIS\`.
+   config keys with defaults under `C:\GREATSAGE\`.
 7. **No silent security weakening** — never lower a risk level, widen a
    permission scope, or disable an approval "so the build passes."
 8. **No test weakening** — never disable, skip, or mock-away a failing test to

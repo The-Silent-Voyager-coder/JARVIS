@@ -1,7 +1,7 @@
 """Configuration loading: defaults → YAML file → environment variables.
 
 Precedence (low → high): built-in defaults, YAML configuration file,
-environment variables (JARVIS_*), explicit CLI overrides (passed as arguments).
+environment variables (GREATSAGE_*), explicit CLI overrides (passed as arguments).
 """
 
 from __future__ import annotations
@@ -21,8 +21,8 @@ from greatsage.configuration.validation import apply_env, build_config, format_p
 from greatsage.exceptions import ConfigurationError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_CONFIG_PATH = REPO_ROOT / "config" / "jarvis.yaml"
-CONFIG_PATH_ENV = "JARVIS_CONFIG_PATH"
+DEFAULT_CONFIG_PATH = REPO_ROOT / "config" / "sage.yaml"
+CONFIG_PATH_ENV = "GREATSAGE_CONFIG_PATH"
 
 
 @dataclass(frozen=True)

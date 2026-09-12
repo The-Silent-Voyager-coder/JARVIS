@@ -16,10 +16,20 @@ from greatsage.tools.environment import is_secret_name
 
 PROTECTED_FILENAMES = frozenset(
     {
+        # Previous generation (originals may still exist as backups).
         "memory.db",
         "audit.log",
         "jarvis.yaml",
         "jarvis.example.yaml",
+        # Current generation.
+        "sage-memory.db",
+        "sage-workspace.db",
+        "sage-plans.db",
+        "sage-tasks.db",
+        "sage-scheduler.db",
+        "sage-audit.log",
+        "sage.yaml",
+        "sage.example.yaml",
         ".env",
         ".envrc",
     }
@@ -30,8 +40,8 @@ PROTECTED_FILENAME_EXCEPTIONS = frozenset(
     {".env.example", ".env.sample", ".env.template"}
 )
 
-#: SQLite sidecars of the protected memory database.
-_MEMORY_DB_SIDECARS = frozenset({"-journal", "-wal", "-shm"})
+#: SQLite sidecars of protected databases.
+_DB_SIDECARS = frozenset({"-journal", "-wal", "-shm"})
 
 
 def _is_protected_name(name: str) -> bool:
@@ -42,10 +52,9 @@ def _is_protected_name(name: str) -> bool:
         return True
     if name.startswith(".env."):
         return True
-    if name.startswith("memory.db") and any(
-        name == f"memory.db{suffix}" for suffix in _MEMORY_DB_SIDECARS
-    ):
-        return True
+    for suffix in _DB_SIDECARS:
+        if name.endswith(suffix) and name[: -len(suffix)] in PROTECTED_FILENAMES:
+            return True
     return False
 
 

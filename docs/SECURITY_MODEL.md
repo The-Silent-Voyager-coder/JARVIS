@@ -20,7 +20,7 @@ Classification rules:
 
 - The **most dangerous** permitted class must always be explicit: no action
   exceeds its declared risk level (a tool cannot silently escalate).
-- Path scoping: `LOW_WRITE` under `C:\JARVIS\workspaces\...` is safer than the
+- Path scoping: `LOW_WRITE` under `C:\GREATSAGE\workspaces\...` is safer than the
   same class at `C:\Windows`; scope must be part of the decision. Actions
   outside configured trusted roots are treated as one level higher.
 - No `SYSTEM` privilege is requested unless a task explicitly needs it and the
@@ -60,7 +60,7 @@ timestamp, session_id, task_id, action, permission_class,
 risk_level, decision, user_response, scope, duration, error
 ```
 
-Audit log location: `C:\JARVIS\data\audit.log` (config-overridable).
+Audit log location: `C:\GREATSAGE\data\sage-audit.log` (config-overridable).
 Audit writes are synchronous and cannot be disabled by agents.
 
 ## 6. Threads (Phase 9 scope — see §10 for what shipped)
@@ -86,7 +86,7 @@ Audit writes are synchronous and cannot be disabled by agents.
   tokens, or API keys; inspection (`jarvis memory list|get|stats|search`)
   never exposes them by design — memory is for curated facts, not secrets.
 - **Content never leaves the machine unencrypted by default.** The SQLite
-  database is a local file under `C:\JARVIS\data\` (config-overridable).
+  database is a local file under `C:\GREATSAGE\data\` (config-overridable).
 - **No automatic conversation storage.** `auto_save_conversations` cannot be
   enabled — validation refuses `true` with an explicit error. Memory writes
   always require a deliberate save decision.
@@ -127,14 +127,14 @@ enforcement layer every tool execution passes through. Full contract:
 - **Scope is part of the decision.** Path arguments are canonicalized
   against the explicit working directory and checked against
   `allowed_roots`/`denied_roots` before any execution; paths outside the
-  roots are denied, not escalated. Protected files (`memory.db`, `.env`,
+  roots are denied, not escalated. Protected files (`sage-memory.db`, `.env`,
   secret-stemmed names) are always denied.
 - **No silent escalation.** The shell classifier can only raise a command's
   risk (`safe`/`restricted`/`dangerous`/`forbidden`); `forbidden` and
   `dangerous` commands are denied outright in every mode.
 - **No `SYSTEM` privilege ever requested.** No tool requests elevation; the
   app runs non-elevated.
-- **Secrets never reach tools.** Environments are scrubbed of `JARVIS_*`
+- **Secrets never reach tools.** Environments are scrubbed of `GREATSAGE_*`
   secret-shaped variables before tools see them; tools cannot inject
   secret-shaped arguments; `system.info` output is redacted before it can
   leak environment values.
@@ -164,7 +164,7 @@ Without changing the §2 risk vocabulary or the allow/ask/deny matrix:
   `command` argv items carrying secret formats (command lines are visible to
   process listings). Key-based denial is unchanged.
 - **Protected files.** `.env.*` (as documented), `.envrc`, and
-  `memory.db-wal`/`-journal`/`-shm` sidecars are now denied; committed
+  `sage-memory.db-wal`/`-journal`/`-shm` sidecars are now denied; committed
   templates (`.env.example`/`.sample`/`.template`) stay readable. The check
   applies to every declared path argument, closing the `shell.execute`
   `cwd` gap.

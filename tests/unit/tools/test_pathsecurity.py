@@ -48,11 +48,29 @@ def test_is_within_relative_root(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "name",
-    ["memory.db", "audit.log", "jarvis.yaml", "jarvis.example.yaml", ".env"],
+    [
+        "memory.db",
+        "audit.log",
+        "jarvis.yaml",
+        "jarvis.example.yaml",
+        "sage-memory.db",
+        "sage-audit.log",
+        "sage.yaml",
+        "sage.example.yaml",
+        ".env",
+    ],
 )
 def test_protected_filenames(tmp_path: Path, name: str) -> None:
     target = tmp_path / name
     assert is_protected_path(target)
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["memory.db-wal", "sage-memory.db-wal", "sage-memory.db-shm", "sage-tasks.db-journal"],
+)
+def test_protected_db_sidecars(tmp_path: Path, name: str) -> None:
+    assert is_protected_path(tmp_path / name)
 
 
 def test_secret_looking_stems_protected(tmp_path: Path) -> None:

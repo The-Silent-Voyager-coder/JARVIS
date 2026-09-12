@@ -35,7 +35,7 @@ def test_config_validate_valid(valid_config_yaml: Path, capsys: pytest.CaptureFi
 def test_config_validate_defaults(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.delenv("JARVIS_CONFIG_PATH", raising=False)
+    monkeypatch.delenv("GREATSAGE_CONFIG_PATH", raising=False)
     monkeypatch.setattr(
         "greatsage.configuration.loader.DEFAULT_CONFIG_PATH",
         tmp_path / "absent.yaml",
@@ -260,7 +260,7 @@ def test_memory_health_command(valid_config_yaml: Path, capsys: pytest.CaptureFi
     assert "Great Sage Memory Health" in out
     assert "status" in out
     assert "healthy" in out
-    assert "memory.db" in out
+    assert "sage-memory.db" in out
 
 
 def test_memory_health_json(valid_config_yaml: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -494,7 +494,7 @@ logging:
   retention_days: 1
 memory:
   enabled: true
-  database_path: "{d}/data/memory.db"
+  database_path: "{d}/data/sage-memory.db"
   auto_save_conversations: false
   default_confidence: 0.8
   retention_days: 365
@@ -512,10 +512,10 @@ tools:
 scheduler:
   enabled: false
   max_schedules: 50
-  database_path: "{d}/data/scheduler.db"
+  database_path: "{d}/data/sage-scheduler.db"
 telegram:
   enabled: false
-  token_env: "JARVIS_TEST_TELEGRAM_TOKEN"
+  token_env: "GREATSAGE_TEST_TELEGRAM_TOKEN"
   allowed_chat_ids: []
   poll_timeout_seconds: 1
   max_listen_seconds: 60
@@ -630,7 +630,7 @@ logging:
   retention_days: 1
 memory:
   enabled: false
-  database_path: "{d}/data/memory.db"
+  database_path: "{d}/data/sage-memory.db"
   auto_save_conversations: false
   default_confidence: 0.8
   retention_days: 365

@@ -74,7 +74,7 @@ structured), `content_text` (FTS index), `source`, `provenance`, `confidence`,
   Phase 3.
 - **Retrieval is deterministic and inspectable.** Same query + same data =
   same order. Every result carries a `match_reason` and its ranking score.
-- **The user can always inspect and delete.** `jarvis memory list|get|stats|
+- **The user can always inspect and delete.** `greatsage memory list|get|stats|
   search|delete` work without any AI services; `--include-deleted` and
   `--include-expired` make even hidden rows visible for inspection.
 
@@ -138,7 +138,7 @@ recency = 1 / (1 + age_days)
 
 ## 7. Storage & Concurrency
 
-- SQLite at `memory.database_path` (default `C:/JARVIS/data/memory.db`);
+- SQLite at `memory.database_path` (default `C:/GREATSAGE/data/sage-memory.db`);
   parent directories created on first use; `enabled: false` creates nothing.
 - Schema versioning: `schema_meta(key, value)` stores `schema_version`;
   migrations are ordered stdlib SQL statements executed in a transaction.
@@ -165,7 +165,7 @@ recency = 1 / (1 + age_days)
 INFO logs likewise carry only ids/types/sources. Content appears only on the
 CLI with `--content` and never in events or default logs.
 
-**Health** (`jarvis memory health`, runtime `memory` check): `accessible`,
+**Health** (`greatsage memory health`, runtime `memory` check): `accessible`,
 `schema_valid`, `migrations_current`, `writable`, `fts_enabled`,
 `schema_version`, `database_path`, `detail`. Status is HEALTHY when the
 database is accessible and correct and a write probe succeeds; a failed
